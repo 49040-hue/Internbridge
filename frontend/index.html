@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InternBridge — Riphah Faculty of Computing</title>
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- ══ LOGIN PAGE ════════════════════════════════════════════ -->
+<div id="login-page">
+  <div class="auth-brand">
+    <div class="auth-logo">Intern<span>Bridge</span></div>
+    <div class="auth-tagline">Riphah International University · Faculty of Computing</div>
+  </div>
+
+  <div class="auth-card">
+    <div class="auth-card-header">
+      <h2>Welcome back</h2>
+      <p>Sign in to your account to continue</p>
+    </div>
+    <div class="role-grid">
+      <button class="role-btn active" data-role="student"    onclick="selectRole(this)">🎓 Student</button>
+      <button class="role-btn"        data-role="company"    onclick="selectRole(this)">🏢 Company</button>
+      <button class="role-btn"        data-role="university" onclick="selectRole(this)">🏫 University Admin</button>
+      <button class="role-btn"        data-role="sysadmin"   onclick="selectRole(this)">⚙️ System Admin</button>
+    </div>
+
+    <div class="form-group">
+      <label>Email Address</label>
+      <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+
+    <button class="btn btn-primary" id="login-btn" onclick="login()">Sign In →</button>
+
+    <div class="auth-divider" id="register-links">
+      <span>Don't have an account?</span>
+      <div class="auth-reg-links">
+        <a onclick="showRegisterPage('student')">Register as Student</a>
+        <span class="divider-dot">·</span>
+        <a onclick="showRegisterPage('company')">Register as Company</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-footer">
+    <span>© 2025 Riphah International University · InternBridge</span>
+  </div>
+</div>
+
+<!-- ══ REGISTER PAGE ═════════════════════════════════════════ -->
+<div id="register-page" style="display:none">
+  <div class="auth-brand">
+    <div class="auth-logo">Intern<span>Bridge</span></div>
+    <div class="auth-tagline">Riphah International University · Faculty of Computing</div>
+  </div>
+
+  <div class="register-card">
+    <div class="auth-card-header">
+      <h2 id="register-title">Create Account</h2>
+      <p>Fill in your details to get started</p>
+    </div>
+
+    <div class="tab-bar" id="register-type-tabs"></div>
+    <div id="register-form-container"></div>
+
+    <div class="auth-divider">
+      <span>Already have an account?</span>
+      <a onclick="showLoginPage()">Sign in →</a>
+    </div>
+  </div>
+
+  <div class="auth-footer">
+    <span>© 2025 Riphah International University · InternBridge</span>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ═══════════════════════════════════════════════ -->
+<div id="app">
+  <nav id="navbar">
+    <div class="nav-logo">Intern<span>Bridge</span></div>
+    <div class="nav-right">
+      <div class="nav-user-info">
+        <span class="nav-user" id="nav-username"></span>
+        <span class="role-tag" id="nav-role"></span>
+      </div>
+      <button class="btn-logout" onclick="logout()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sign Out
+      </button>
+    </div>
+  </nav>
+
+  <div id="content">
+    <aside id="sidebar"></aside>
+    <main id="main">
+      <!-- Student Pages -->
+      <div id="page-dashboard"        class="page"></div>
+      <div id="page-search"           class="page"></div>
+      <div id="page-my-applications"  class="page"></div>
+      <div id="page-decisions"        class="page"></div>
+      <div id="page-my-feedback"      class="page"></div>
+      <div id="page-my-complaints"    class="page"></div>
+      <div id="page-self-found"       class="page"></div>
+      <div id="page-criteria-view"    class="page"></div>
+      <div id="page-profile"          class="page"></div>
+      <!-- Company Pages -->
+      <div id="page-company-dashboard" class="page"></div>
+      <div id="page-my-internships"    class="page"></div>
+      <div id="page-post-internship"   class="page"></div>
+      <div id="page-applicants"        class="page"></div>
+      <div id="page-file-complaint"    class="page"></div>
+      <div id="page-company-profile"   class="page"></div>
+      <!-- University Pages -->
+      <div id="page-uni-dashboard"       class="page"></div>
+      <div id="page-verify-students"     class="page"></div>
+      <div id="page-verify-companies"    class="page"></div>
+      <div id="page-approve-internships" class="page"></div>
+      <div id="page-self-found-review"   class="page"></div>
+      <div id="page-all-applications"    class="page"></div>
+      <div id="page-student-details"     class="page"></div>
+      <div id="page-complaints"          class="page"></div>
+      <div id="page-send-feedback"       class="page"></div>
+      <div id="page-monitor-posts"       class="page"></div>
+      <div id="page-criteria"            class="page"></div>
+      <div id="page-reports"             class="page"></div>
+      <div id="page-uni-profile"         class="page"></div>
+      <!-- System Admin Pages -->
+      <div id="page-sys-dashboard"  class="page"></div>
+      <div id="page-manage-users"   class="page"></div>
+      <div id="page-security"       class="page"></div>
+      <div id="page-backup"         class="page"></div>
+      <div id="page-activity"       class="page"></div>
+      <div id="page-sys-profile"    class="page"></div>
+    </main>
+  </div>
+</div>
+
+<!-- ══ MODAL ════════════════════════════════════════════════= -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script src="js/student.js"></script>
+<script src="js/company.js"></script>
+<script src="js/university.js"></script>
+<script src="js/sysadmin.js"></script>
+</body>
+</html>
