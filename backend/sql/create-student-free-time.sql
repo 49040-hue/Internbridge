@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS student_free_time (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  student_id INT NOT NULL,
+  day VARCHAR(20) NOT NULL,
+  start_time VARCHAR(10) NOT NULL,
+  end_time VARCHAR(10) NOT NULL
+);
