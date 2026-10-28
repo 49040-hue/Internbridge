@@ -39,6 +39,8 @@ Copy `.env.example` to `.env` in the project root and set the database and email
 credentials before starting the server. For Gmail, use a Google App Password
 (with 2-Step Verification enabled), not your normal account password. Keep `.env`
 private and never commit real credentials.
+Database TLS is disabled by default for local MySQL servers. Set `DB_SSL=true`
+when your database provider requires SSL/TLS.
 
 ```bash
 npm install
