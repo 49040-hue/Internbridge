@@ -306,6 +306,30 @@ select:focus {
   letter-spacing: 0;
 }
 
+#login-page .forgot-password-row {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin: -2px 0 14px;
+}
+
+#login-page .forgot-password-link {
+  display: inline-block;
+  color: #60a5fa;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  text-decoration: none;
+  opacity: 1;
+  visibility: visible;
+}
+
+#login-page .forgot-password-link:hover,
+#login-page .forgot-password-link:focus-visible {
+  color: #93c5fd;
+  text-decoration: underline;
+}
+
 #login-page .btn-primary {
   box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
 }
