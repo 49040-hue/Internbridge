@@ -35,6 +35,11 @@ InternBridge_Complete/
 
 ## How to Run (Backend)
 
+Copy `.env.example` to `.env` in the project root and set the database and email
+credentials before starting the server. For Gmail, use a Google App Password
+(with 2-Step Verification enabled), not your normal account password. Keep `.env`
+private and never commit real credentials.
+
 ```bash
 npm install
 npm start
@@ -46,6 +51,11 @@ Server runs at: http://localhost:3000
 ## How to Run (Frontend Only)
 Just open `frontend/index.html` in browser — no server needed.
 Uses localStorage as database automatically.
+Email verification and OTP delivery require the backend and configured SMTP credentials.
+
+If a verification code does not arrive, check the inbox spam folder and use **Resend OTP**.
+If sending still fails, confirm `EMAIL_USER` and `EMAIL_PASS` in the project-root `.env`
+and check the backend console for the SMTP error.
 
 ---
 

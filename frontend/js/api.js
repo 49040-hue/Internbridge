@@ -208,68 +208,44 @@ const api = {
   },
 
   registerStudent: async (d) => {
-    // Try backend API first
+    let res;
     try {
-      const res = await fetch('/api/auth/register/student', {
+      res = await fetch('/api/auth/register/student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(d)
       });
-      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to register student.'); }
-      return await _parseOrText(res);
     } catch (err) {
-      // Fallback to in-memory simulation when offline
-      await _delay();
-      if (!d.name||!d.email||!d.password) throw new Error('Name, email and password are required.');
-      if (_db.users.find(u => u.email === d.email)) throw new Error('This email is already registered.');
-      _db.users.push({
-        id:_db._next.users++, name:d.name, email:d.email, password:d.password, role:'student',
-        university:'Riphah International University', program:d.program||'', semester:parseInt(d.semester)||0,
-        cgpa:parseFloat(d.cgpa)||0, creditHours:parseInt(d.creditHours)||0, electiveCourse:d.electiveCourse||'',
-        skills:d.skills||'', transcriptDoc:d.transcriptDoc||null, enrollmentDoc:d.enrollmentDoc||null, cv:null,
-        verificationStatus:'pending', verificationNote:'', registeredAt:new Date().toISOString(),
-      });
-      _log('Student registered (pending): ' + d.name, 'info');
-      _save();
-      return { message: 'Registration submitted! Awaiting university verification.' };
+      throw new Error('Could not reach the InternBridge server. Email verification requires the backend to be running.');
     }
+    if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to register student.'); }
+    return await _parseOrText(res);
   },
 
   verifyOtp: async (email, otp) => {
+    let res;
     try {
-      const res = await fetch('/api/auth/verify-otp', {
+      res = await fetch('/api/auth/verify-otp', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, otp })
       });
-      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to verify OTP.'); }
-      return await _parseOrText(res);
     } catch (err) {
-      await _delay();
-      // In-memory fallback: check simulated password_resets stored in localStorage
-      const resets = JSON.parse(localStorage.getItem('ib_password_resets') || '{}');
-      // Fallback cannot reliably verify by email; return generic error
-      throw new Error(err.message || 'Failed to verify OTP.');
+      throw new Error('Could not reach the InternBridge server. Please try again when the backend is available.');
     }
+    if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to verify OTP.'); }
+    return await _parseOrText(res);
   },
 
   resendOtp: async (email) => {
+    let res;
     try {
-      const res = await fetch('/api/auth/resend-otp', {
+      res = await fetch('/api/auth/resend-otp', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email })
       });
-      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to resend OTP.'); }
-      return await _parseOrText(res);
     } catch (err) {
-      // Fallback: simulate resend in local dev (store a new code in localStorage)
-      await _delay();
-      const u = _db.users.find(u => u.email && u.email.toLowerCase() === (email||'').toLowerCase());
-      if (!u) throw new Error('Invalid request.');
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expires = Date.now() + 10 * 60 * 1000;
-      const resets = JSON.parse(localStorage.getItem('ib_password_resets') || '{}');
-      resets[email.toLowerCase()] = { otp, expires }; localStorage.setItem('ib_password_resets', JSON.stringify(resets));
-      console.log('DEV resend OTP for', email, otp);
-      return { message: 'New OTP sent to your email.' };
+      throw new Error('Could not reach the InternBridge server. Please try again when the backend is available.');
     }
+    if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to resend OTP.'); }
+    return await _parseOrText(res);
   },
 
   // Notifications API
@@ -348,36 +324,21 @@ const api = {
   },
 
   registerCompany: async (d) => {
-    // Try backend API first
+    let res;
     try {
-      const res = await fetch('/api/auth/register/company', {
+      res = await fetch('/api/auth/register/company', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(d)
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || body.message || 'Failed to register company.');
-      }
-      return await _parseOrText(res);
     } catch (err) {
-      // Fallback to in-memory simulation for offline/dev
-      await _delay();
-      if (!d.name||!d.email||!d.password) throw new Error('Name, email and password are required.');
-      if (_db.users.find(u => u.email === d.email)) throw new Error('This email is already registered.');
-      // store unified registration info in in-memory user for dev fallback
-      _db.users.push({
-        id:_db._next.users++, name:d.name, email:d.email, password:d.password, role:'company',
-        city:d.city||'', pasha:d.pasha||'', pseb:d.pseb||'', secp:d.secp||'',
-        registrationType: d.registrationType || null, registrationId: d.registrationId || null, yearOfRegistration: d.yearOfRegistration || null,
-        cmmi:d.cmmi||'', operational:d.operational||'',
-        regCertDoc:d.regCertDoc||null, cmmiDoc:d.cmmiDoc||null,
-        status:'pending', rejectionNote:'', registeredAt:new Date().toISOString(),
-      });
-      _log('Company registered (pending): ' + d.name, 'warning');
-      _save();
-      return { message: 'Company registered. Awaiting university verification.' };
+      throw new Error('Could not reach the InternBridge server. Email verification requires the backend to be running.');
     }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || body.message || 'Failed to register company.');
+    }
+    return await _parseOrText(res);
   },
 
   // Forgot / Reset password (tries backend first; falls back to in-memory simulation)

@@ -265,7 +265,7 @@ async function registerStudent() {
     transcriptDoc=await readFileAsBase64(document.getElementById('r-transcript'));
   } catch(e) { btn.disabled=false; btn.textContent='Create Student Account →'; return showToast('File error: '+e.message,'error'); }
   try {
-    await api.registerStudent({
+    const result = await api.registerStudent({
       name,email: email.toLowerCase(),password,
       program:document.getElementById('r-program').value,
       semester:document.getElementById('r-semester').value,
@@ -274,12 +274,12 @@ async function registerStudent() {
       skills:document.getElementById('r-skills').value,
       transcriptDoc,
     });
-    showOTPVerificationScreen(email);
+    showOTPVerificationScreen(email, result.emailSent !== false);
   } catch(e) { showToast(e.message,'error'); btn.disabled=false; btn.textContent='Create Student Account →'; }
 }
 
 // ── OTP VERIFICATION UI ──────────────────────────────────────
-function showOTPVerificationScreen(email) {
+function showOTPVerificationScreen(email, emailSent = true) {
   document.getElementById('register-page').style.display='none';
   document.getElementById('login-page').style.display='flex';
   document.getElementById('login-page').innerHTML = `
@@ -290,7 +290,9 @@ function showOTPVerificationScreen(email) {
     <div class="auth-card" style="max-width:480px;width:100%;text-align:center">
       <div style="font-size:46px;margin-bottom:12px">✉️</div>
       <h2 style="margin-bottom:8px">Verify your email</h2>
-      <p style="color:var(--muted);font-size:13px;margin-bottom:18px">Enter the 6-digit code we sent to <strong>${email}</strong></p>
+      ${emailSent
+        ? `<p style="color:var(--muted);font-size:13px;margin-bottom:18px">Enter the 6-digit code sent to <strong>${email}</strong>. Check your spam folder if it is not in your inbox.</p>`
+        : `<div class="alert alert-warning" style="text-align:left">Your account was created, but the verification email could not be sent. Check the email server configuration, then use Resend OTP.</div><p style="color:var(--muted);font-size:13px;margin-bottom:18px">Verification code for <strong>${email}</strong></p>`}
       <div class="form-group"><label>Verification Code</label><input id="otp-code" type="text" maxlength="6" placeholder="123456" /></div>
           <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
             <button class="btn btn-outline" onclick="showLoginScreen('student')">Cancel</button>
@@ -395,7 +397,7 @@ async function registerCompany() {
     else if (rt === 'PSEB') pseb = rid;
     else if (rt === 'SECP') secp = rid;
 
-    await api.registerCompany({
+    const result = await api.registerCompany({
       name, email, password, city, cmmi,
       registrationType, registrationId, yearOfRegistration,
       // legacy fields populated based on selected registration type
@@ -404,7 +406,7 @@ async function registerCompany() {
       regCertDoc, cmmiDoc,
     });
     // Show OTP verification modal so company can verify email before admin review
-    showOTPVerificationScreen(email);
+    showOTPVerificationScreen(email, result.emailSent !== false);
   } catch(e) { showToast(e.message,'error'); btn.disabled=false; btn.textContent='Submit Application →'; }
 }
 

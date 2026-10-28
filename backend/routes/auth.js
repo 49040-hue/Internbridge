@@ -235,11 +235,14 @@ router.post('/register/student', async (req, res) => {
     if (!mailRes || !mailRes.ok) {
       console.error('Failed to send OTP email:', mailRes && mailRes.error);
       console.warn(`New student registered (email unverified, email send failed): ${name}`);
-      return res.status(201).json({ message: 'Account created but verification email failed. Please use Resend OTP.' });
+      return res.status(201).json({
+        message: 'Account created, but the verification email could not be sent. Check the email server configuration, then use Resend OTP.',
+        emailSent: false
+      });
     }
 
     console.warn(`New student registered (email unverified): ${name}`);
-    return res.status(201).json({ message: 'Account created. Please check your email for OTP verification code.' });
+    return res.status(201).json({ message: 'Account created. Please check your email for OTP verification code.', emailSent: true });
   } catch (err) {
     console.error('Register student error:', err);
     res.status(500).json({ error: 'Internal server error.' });
@@ -413,11 +416,14 @@ router.post('/register/company', async (req, res) => {
     if (!mailRes || !mailRes.ok) {
       console.error('Failed to send OTP email for company registration:', mailRes && mailRes.error);
       console.warn(`New company registered (email unverified, email send failed): ${name}`);
-      return res.status(201).json({ message: 'Company account created but verification email failed. Please use Resend OTP.' });
+      return res.status(201).json({
+        message: 'Company account created, but the verification email could not be sent. Check the email server configuration, then use Resend OTP.',
+        emailSent: false
+      });
     }
 
     console.warn(`New company registered (email unverified): ${name}`);
-    return res.status(201).json({ message: 'Company registered. Please check your email for OTP verification code.' });
+    return res.status(201).json({ message: 'Company registered. Please check your email for OTP verification code.', emailSent: true });
   } catch (err) {
     console.error('Register company error:', err);
     res.status(500).json({ error: 'Internal server error.' });
@@ -603,7 +609,7 @@ router.post('/resend-otp', resendLimiter, async (req, res) => {
   const email = req.body && req.body.email ? String(req.body.email).trim().toLowerCase() : '';
   if (!email) return res.status(400).json({ error: 'Email is required.' });
   try {
-    const [uRows] = await db.execute('SELECT id, name, email, accountStatus FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1', [email]);
+    const [uRows] = await db.execute('SELECT id, name, email, accountStatus, status FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1', [email]);
     if (!uRows.length) return res.status(400).json({ error: 'Invalid request.' });
     const user = uRows[0];
     const isUnverified = user.accountStatus === 'email_unverified' || user.status === 'email_unverified';
