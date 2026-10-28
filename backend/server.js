@@ -1,4 +1,6 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
 let db;
 try {
   db = require('./config/db');
@@ -54,7 +56,7 @@ try {
 // InternBridge v4 — Backend Server
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -81,7 +83,13 @@ try {
 // Initialize email subsystem (verifies SMTP at startup)
 const { init: initEmail } = require('./utils/email');
 
-app.use(cors());
+const allowedOrigin = process.env.APP_URL;
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || !allowedOrigin || origin === allowedOrigin) return callback(null, true);
+    return callback(new Error('Origin not allowed'));
+  }
+}));
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, '../frontend')));
 
@@ -97,19 +105,48 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '4.0', ti
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/index.html')));
 
+async function seedDevelopmentAccounts() {
+  if (process.env.NODE_ENV === 'production') return;
+
+  const demoAccounts = [
+    { name: 'University Admin', email: 'admin@riphah.edu.pk', password: 'Salam123', role: 'university', university: 'Riphah International University', department: 'Faculty of Computing', status: 'verified', accountStatus: 'verified' },
+    { name: 'System Admin', email: 'sysadmin@riphah.edu.pk', password: 'Salam321', role: 'sysadmin', university: null, department: null, status: 'verified', accountStatus: 'verified' },
+    { name: 'Ahmed Raza', email: 'student@riphah.edu.pk', password: 'password', role: 'student', university: 'Riphah International University', department: 'Faculty of Computing', status: 'verified', accountStatus: 'verified' },
+    { name: 'TechCorp Pvt Ltd', email: 'company@techcorp.com', password: 'password', role: 'company', university: null, department: null, status: 'verified', accountStatus: 'verified' }
+  ];
+
+  for (const account of demoAccounts) {
+    const [existing] = await db.execute('SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1', [account.email]);
+    if (existing.length) continue;
+
+    await db.execute(
+      `INSERT INTO users
+        (name,email,password,role,university,department,status,accountStatus,registeredAt)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      [account.name, account.email, bcrypt.hashSync(account.password, 10), account.role,
+        account.university, account.department, account.status, account.accountStatus,
+        new Date().toISOString()]
+    );
+  }
+}
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error.' });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🚀 InternBridge v4 running at http://localhost:${PORT}`);
-  console.log(`\n🔑 Default Credentials:`);
-  console.log(`   Student:          student@riphah.edu.pk  / password`);
-  console.log(`   Company:          company@techcorp.com   / password`);
-  console.log(`   University Admin: admin@riphah.edu.pk    / Salam123`);
-  console.log(`   System Admin:     sysadmin@riphah.edu.pk / Salam321\n`);
-});
+async function startServer() {
+  try {
+    await seedDevelopmentAccounts();
+  } catch (err) {
+    console.error('Development demo seed failed:', err.message);
+  }
 
-// Verify email transporter after server start
-initEmail();
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🚀 InternBridge v4 listening on port ${PORT}`);
+  });
+
+  initEmail();
+}
+
+startServer();

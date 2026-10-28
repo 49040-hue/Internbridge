@@ -471,7 +471,9 @@ router.post('/forgot-password', async (req, res) => {
     await db.execute('DELETE FROM password_resets WHERE user_id = ?', [user.id]);
     await db.execute('INSERT INTO password_resets (user_id, token, expires_at, created_at) VALUES (?,?,?,?)', [user.id, token, expiresAt.toISOString().slice(0,19).replace('T',' '), createdAt.toISOString().slice(0,19).replace('T',' ')]);
 
-    const resetLink = `${process.env.APP_URL || 'http://localhost:3000'}/reset-password.html?token=${token}`;
+    const configuredAppUrl = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
+    const requestOrigin = `${req.protocol}://${req.get('host')}`;
+    const resetLink = `${configuredAppUrl || requestOrigin}/reset-password.html?token=${token}`;
     // Send email via centralized email util (with retries). Requires EMAIL_USER and EMAIL_PASS in .env
     const mailOptions = {
       from: `InternBridge <${process.env.EMAIL_USER}>`,

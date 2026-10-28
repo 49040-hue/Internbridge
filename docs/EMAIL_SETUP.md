@@ -11,8 +11,8 @@ Follow these steps to create a Gmail App Password and configure the project:
    - Click "Generate" and copy the 16-character password.
 5. Open the project's `.env` file at the repository root and set:
 
-   EMAIL_USER=your.email@gmail.com
-   EMAIL_PASS=<paste_the_16_char_app_password_here>
+   EMAIL_USER=Khawajaxsalam@gmail.com
+   EMAIL_PASS=<your-gmail-app-password>
    SMTP_HOST=smtp.gmail.com
    SMTP_PORT=587
    SMTP_SECURE=false
