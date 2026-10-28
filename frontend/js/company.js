@@ -12,9 +12,14 @@ function _getToken() {
   return (typeof authToken !== 'undefined' && authToken) ? authToken : localStorage.getItem('ib_token');
 }
 
+function _companyAuth() {
+  const t = localStorage.getItem('token') || localStorage.getItem('ib_token') || '';
+  return 'Bearer ' + t;
+}
+
 async function initCompanyDashboard() {
   try {
-    const token = 'Bearer ' + (localStorage.getItem('ib_token') || '');
+    const token = _companyAuth();
     const [internships, applications] = await Promise.all([
       api.getMyInternships(token), api.getCompanyApplications(token),
     ]);
@@ -49,7 +54,8 @@ async function initCompanyDashboard() {
 
 async function initMyInternships() {
   try {
-    const internships = await api.getMyInternships('Bearer ' + (localStorage.getItem('ib_token') || ''));
+    const internships = await api.getMyInternships(_companyAuth());
+    window._companyInternships = internships;
     document.getElementById('page-my-internships').innerHTML = `
       <div class="page-header">
         <div><div class="page-title">My Internships</div></div>
@@ -57,7 +63,7 @@ async function initMyInternships() {
       </div>
       ${!internships.length ? `<div class="empty-state card"><div class="icon">📌</div><p>No internships posted yet.</p></div>` :
         internships.map(i=>`
-        <div class="internship-card">
+        <div class="internship-card" id="internship-card-${i.id}">
           <div>
             <div class="title">${i.title}
               ${i.riphahApproved ? ' <span class="chip-ok">✓ Riphah Approved</span>' : '<span class="chip-warn">⏳ Awaiting Riphah Approval</span>'}
@@ -69,15 +75,62 @@ async function initMyInternships() {
           <div class="actions">
             ${badge(i.status)}
             ${i.status==='open' ? `<button class="btn btn-danger btn-sm" onclick="closeInternship(${i.id})">Close</button>` : ''}
+            ${(i.status==='pending' || i.status==='open') && (!i.sysadminApproved || i.sysadminApproved==0) ? `<button class="btn btn-secondary btn-sm" onclick="editInternship(${i.id})">Edit</button>` : ''}
           </div>
         </div>`).join('')}`;
   } catch(e) { showPageError(document.getElementById('page-my-internships'), e.message); }
 }
 
+function editInternship(id) {
+  try {
+    const list = window._companyInternships || [];
+    const i = list.find(x => x.id === id);
+    if (!i) return showToast('Internship not found.', 'error');
+    if (i.sysadminApproved && i.sysadminApproved==1) return showToast('Approved internships cannot be edited.', 'error');
+    const container = document.getElementById('internship-card-' + id);
+    if (!container) return;
+    container.innerHTML = `
+      <div style="flex:1">
+        <div class="form-group"><label>Job Title</label><input id="edit-title-${id}" type="text" value="${escapeHtml(i.title||'')}" /></div>
+        <div class="form-group"><label>Deadline</label><input id="edit-deadline-${id}" type="date" value="${i.deadline||''}" /></div>
+        <div class="form-group"><label>Stipend</label><input id="edit-stipend-${id}" type="text" value="${i.stipend||''}" /></div>
+        <div class="form-group"><label>Type</label>
+          <select id="edit-type-${id}">
+            <option value="full-time" ${i.type==='full-time'?'selected':''}>Full-time</option>
+            <option value="part-time" ${i.type==='part-time'?'selected':''}>Part-time</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Duration (weeks)</label><input id="edit-weeks-${id}" type="number" value="${i.durationWeeks||8}" /></div>
+        <div class="form-group"><label>Description</label><textarea id="edit-desc-${id}">${escapeHtml(i.description||'')}</textarea></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+        <button class="btn btn-primary" onclick="saveEditedInternship(${id})">Save</button>
+        <button class="btn btn-outline" onclick="initMyInternships()">Cancel</button>
+      </div>`;
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function saveEditedInternship(id) {
+  try {
+    const data = {};
+    const title = document.getElementById('edit-title-' + id).value.trim(); if (title) data.title = title;
+    const deadline = document.getElementById('edit-deadline-' + id).value; if (deadline) data.deadline = deadline;
+    const stipend = document.getElementById('edit-stipend-' + id).value.trim(); if (stipend !== undefined) data.stipend = stipend;
+    const type = document.getElementById('edit-type-' + id).value; if (type) data.type = type;
+    const weeks = parseInt(document.getElementById('edit-weeks-' + id).value) || 0; data.durationWeeks = weeks;
+    const desc = document.getElementById('edit-desc-' + id).value.trim(); if (desc !== undefined) data.description = desc;
+    await api.updateInternship(id, data, _companyAuth());
+    showToast('Internship updated.', 'success');
+    initMyInternships();
+  } catch (e) { showToast(e.message || 'Update failed', 'error'); }
+}
+
+function escapeHtml(s) { return (s+'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
+
 async function closeInternship(id) {
   if (!confirm('Close this internship posting?')) return;
   try {
-    await api.closeInternship(id, 'Bearer ' + (localStorage.getItem('ib_token') || ''));
+    await api.closeInternship(id, _companyAuth());
     showToast('Internship closed.', 'info');
     initMyInternships();
   } catch(e) { showToast(e.message, 'error'); }
@@ -87,7 +140,7 @@ function initPostInternship() {
   _timeSlots = [];
   document.getElementById('page-post-internship').innerHTML = `
     <div class="page-header"><div><div class="page-title">Post Internship</div>
-      <div class="page-subtitle">Submission requires Riphah university admin approval before students can apply.</div>
+      <div class="page-subtitle">Submission requires Riphah university approval before students can apply.</div>
     </div></div>
     <div class="alert alert-info"><span class="alert-icon">ℹ️</span>
       <div>Per Riphah criteria: internship must be <strong>8 weeks full-time or 16 weeks part-time</strong>, on-site only (no remote).</div>
@@ -166,7 +219,7 @@ async function submitPostInternship() {
   if (!d.title||!d.city||!d.deadline) return showToast('Title, city and deadline are required.', 'error');
   if (d.durationWeeks < 8)            return showToast('Duration must be at least 8 weeks.', 'error');
   try {
-    await api.postInternship(d, 'Bearer ' + (localStorage.getItem('ib_token') || ''));
+    await api.postInternship(d, _companyAuth());
     showToast('Internship submitted! Awaiting Riphah university approval.', 'success');
     _timeSlots = [];
     navigateTo('my-internships');
@@ -203,7 +256,7 @@ function renderTimeSlots() {
 
 async function initApplicants() {
   try {
-    const apps = await api.getCompanyApplications('Bearer ' + (localStorage.getItem('ib_token') || ''));
+    const apps = await api.getCompanyApplications(_companyAuth());
     document.getElementById('page-applicants').innerHTML = `
       <div class="page-header"><div><div class="page-title">Student Applications</div>
         <div class="page-subtitle">Review applications and extend or decline offers</div>
@@ -211,45 +264,58 @@ async function initApplicants() {
       ${!apps.length ? `<div class="empty-state card"><div class="icon">📋</div><p>No applications yet.</p></div>` :
       `<div class="card"><div class="table-wrap"><table>
         <thead><tr><th>Student</th><th>University</th><th>CGPA</th><th>Skills</th><th>Position</th><th>Applied</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>${apps.map(a=>`<tr>
-          <td>
-            <strong>${a.studentName}</strong><br>
-            <span style="font-size:11px;color:var(--muted)">${a.studentEmail||''}</span>
-          </td>
-          <td style="font-size:12px">${a.studentUniversity||'—'}</td>
-          <td style="font-size:12px"><strong>${a.studentCgpa||'—'}</strong></td>
-          <td style="font-size:11px;color:var(--muted)">${a.studentSkills||'—'}</td>
-          <td>${a.internshipTitle}</td>
-          <td>${a.appliedAt}</td>
-          <td>${badge(a.status)}</td>
-          <td><div class="td-actions">
-            ${a.status==='pending'?`
-              <button class="btn btn-success" onclick="openReviewModal(${a.id},'company_accepted')">Accept</button>
-              <button class="btn btn-danger"  onclick="reviewApplication(${a.id},'company_rejected','')">Reject</button>`:''}
-            ${(a.status==='student_confirmed'||a.status==='university_approved')?
-              `<button class="btn btn-warning btn-sm" onclick="navigateTo('file-complaint');window._complaintApp=${a.id}">File Complaint</button>`:''}
-            ${a.status==='company_accepted'||a.status==='company_rejected'?'<span style="font-size:12px;color:var(--muted)">Decision sent</span>':''}
-          </div></td>
-        </tr>`).join('')}</tbody>
+        <tbody>${apps.map(a=>{
+            const s = a.studentDetails || a;
+            const studentName = s && (s.name || s.studentName) ? (s.name || s.studentName) : '';
+            const studentEmail = s && (s.email || s.studentEmail) ? (s.email || s.studentEmail) : '';
+            const studentUniversity = s && (s.university || s.studentUniversity) ? (s.university || s.studentUniversity) : '—';
+            const studentCgpa = s && (s.cgpa || s.studentCgpa) ? (s.cgpa || s.studentCgpa) : '—';
+            const studentSkills = s && (s.skills || s.studentSkills) ? (s.skills || s.studentSkills) : '—';
+            const docsBtn = (s && s.transcriptFileId) ? `<div style="margin-top:6px"><button class="btn btn-outline btn-sm" onclick="viewFile(${s.transcriptFileId})">Transcript</button></div>` : '';
+            return `<tr>
+              <td>
+                <strong>${studentName}</strong><br>
+                <span style="font-size:11px;color:var(--muted)">${studentEmail||''}</span>
+                ${docsBtn}
+              </td>
+              <td style="font-size:12px">${studentUniversity||'—'}</td>
+              <td style="font-size:12px"><strong>${studentCgpa||'—'}</strong></td>
+              <td style="font-size:11px;color:var(--muted)">${studentSkills||'—'}</td>
+              <td>${a.internshipTitle}</td>
+              <td>${a.appliedAt}</td>
+              <td>${badge(a.status)}</td>
+              <td><div class="td-actions">
+                ${a.status==='pending'?`
+                  <button class="btn btn-success" onclick="openReviewModal(${a.id},'company_accepted')">Accept</button>
+                  <button class="btn btn-danger"  onclick="reviewApplication(${a.id},'company_rejected','')">Reject</button>`:''}
+                ${(a.status==='student_confirmed'||a.status==='university_approved')?
+                  `<button class="btn btn-warning btn-sm" onclick="navigateTo('file-complaint');window._complaintApp=${a.id}">File Complaint</button>`:''}
+                ${a.status==='company_accepted'||a.status==='company_rejected'?'<span style="font-size:12px;color:var(--muted)">Decision sent</span>':''}
+              </div></td>
+            </tr>`;
+          }).join('')}</tbody>
       </table></div></div>`}`;
   } catch(e) { showPageError(document.getElementById('page-applicants'), e.message); }
 }
 
 function openReviewModal(id, status) {
-  openModal(`
-    <h3>Accept Application</h3>
-    <div class="form-group"><label>Message to Student (Optional)</label>
-      <textarea id="review-msg" placeholder="e.g. We are pleased to offer you this internship. Please confirm at your earliest convenience."></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-success" onclick="reviewApplication(${id},'company_accepted',document.getElementById('review-msg').value)">Send Offer</button>
-    </div>`);
+  const container = document.createElement('div');
+  const h3 = document.createElement('h3'); h3.textContent = 'Accept Application'; container.appendChild(h3);
+  const group = document.createElement('div'); group.className = 'form-group';
+  const label = document.createElement('label'); label.textContent = 'Message to Student (Optional)';
+  const textarea = document.createElement('textarea'); textarea.id = 'review-msg'; textarea.placeholder = 'e.g. We are pleased to offer you this internship. Please confirm at your earliest convenience.';
+  group.appendChild(label); group.appendChild(textarea); container.appendChild(group);
+  const actions = document.createElement('div'); actions.className = 'modal-actions';
+  const btnCancel = document.createElement('button'); btnCancel.className = 'btn btn-outline'; btnCancel.textContent = 'Cancel'; btnCancel.onclick = closeModal;
+  const btnSend = document.createElement('button'); btnSend.className = 'btn btn-success'; btnSend.textContent = 'Send Offer';
+  btnSend.onclick = function() { reviewApplication(id, 'company_accepted', document.getElementById('review-msg').value); };
+  actions.appendChild(btnCancel); actions.appendChild(btnSend); container.appendChild(actions);
+  openModal(container.innerHTML);
 }
 
 async function reviewApplication(id, status, feedback) {
   try {
-    await api.updateApplication(id, status, feedback, 'Bearer ' + (localStorage.getItem('ib_token') || ''));
+    await api.updateApplication(id, status, feedback, _companyAuth());
     closeModal();
     showToast(status==='company_accepted'?'Offer extended to student!':'Application rejected.', 'info');
     initApplicants();
@@ -258,31 +324,36 @@ async function reviewApplication(id, status, feedback) {
 
 async function initFileComplaint() {
   try {
-    const apps   = await api.getCompanyApplications('Bearer ' + (localStorage.getItem('ib_token') || ''));
-    const active = apps.filter(a => a.status==='student_confirmed'||a.status==='university_approved');
-    document.getElementById('page-file-complaint').innerHTML = `
-      <div class="page-header"><div><div class="page-title">File Complaint</div>
-        <div class="page-subtitle">Report issues with an intern to the Riphah university admin</div>
-      </div></div>
-      <div class="card">
-        ${!active.length ? `<div class="empty-state"><div class="icon">✅</div><p>No active interns to file complaints about.</p></div>` :
-        `<div class="form-group"><label>Select Intern *</label>
-          <select id="fc-app">
-            <option value="">— Select intern —</option>
-            ${active.map(a=>`<option value="${a.id}">${a.studentName} — ${a.internshipTitle}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>Subject *</label>
-          <input id="fc-subject" type="text" placeholder="e.g. Attendance Issues, Misconduct, Performance" />
-        </div>
-        <div class="form-group"><label>Description *</label>
-          <textarea id="fc-desc" placeholder="Provide a detailed description of the issue..."></textarea>
-        </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn btn-primary" onclick="submitComplaint()">Submit Complaint</button>
-          <button class="btn btn-outline" onclick="navigateTo('company-dashboard')">Cancel</button>
-        </div>`}
-      </div>`;
+    const apps   = await api.getCompanyApplications(_companyAuth());
+    const active = apps.filter(a => a.status==='student_confirmed' || a.status==='university_approved');
+    let html = '';
+    html += '<div class="page-header"><div><div class="page-title">File Complaint</div>';
+    html += '<div class="page-subtitle">Report issues with an intern to the Riphah university</div>';
+    html += '</div></div>';
+    html += '<div class="card">';
+    if (!active.length) {
+      html += '<div class="empty-state"><div class="icon">✅</div><p>No active interns to file complaints about.</p></div>';
+    } else {
+      html += '<div class="form-group"><label>Select Intern *</label>';
+      html += '<select id="fc-app">';
+      html += '<option value="">— Select intern —</option>';
+      for (const a of active) {
+        html += '<option value="' + a.id + '">' + (a.studentName || '') + ' — ' + (a.internshipTitle || '') + '</option>';
+      }
+      html += '</select></div>';
+      html += '<div class="form-group"><label>Subject *</label>';
+      html += '<input id="fc-subject" type="text" placeholder="e.g. Attendance Issues, Misconduct, Performance" />';
+      html += '</div>';
+      html += '<div class="form-group"><label>Description *</label>';
+      html += '<textarea id="fc-desc" placeholder="Provide a detailed description of the issue..."></textarea>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:10px">';
+      html += '<button class="btn btn-primary" onclick="submitComplaint()">Submit Complaint</button>';
+      html += '<button class="btn btn-outline" onclick="navigateTo(\'company-dashboard\')">Cancel</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+    document.getElementById('page-file-complaint').innerHTML = html;
     if (window._complaintApp) {
       const sel = document.getElementById('fc-app');
       if (sel) sel.value = window._complaintApp;
@@ -297,15 +368,21 @@ async function submitComplaint() {
   const desc    = document.getElementById('fc-desc').value.trim();
   if (!appId||!subject||!desc) return showToast('All fields are required.', 'error');
   try {
-    await api.submitComplaint({ applicationId:appId, subject, description:desc }, 'Bearer ' + (localStorage.getItem('ib_token') || ''));
-    showToast('Complaint submitted to university admin.', 'success');
+    await api.submitComplaint({ applicationId:appId, subject, description:desc }, _companyAuth());
+    showToast('Complaint submitted to university.', 'success');
     navigateTo('company-dashboard');
   } catch(e) { showToast(e.message, 'error'); }
 }
 
 async function initCompanyProfile() {
   try {
-    const profile = await api.getProfile('Bearer ' + (localStorage.getItem('ib_token') || ''));
+    const profile = await api.getProfile(_companyAuth());
+    // compute file IDs (backend now returns regCertFileId / cmmiFileId when available)
+    const regId = profile.regCertFileId || (profile.regCertDoc ? parseInt((profile.regCertDoc || '').split('/').pop()) : null);
+    const cmmiId = profile.cmmiFileId || (profile.cmmiDoc ? parseInt((profile.cmmiDoc || '').split('/').pop()) : null);
+    const regHtml = regId ? `<div>📄 Registration Certificate: <span class="text-green">✓ Uploaded</span> <button class="btn btn-outline btn-sm" onclick="viewFile(${regId})">View</button></div>` : `<div>📄 Registration Certificate: <span class="text-red">Not uploaded</span></div>`;
+    const cmmiHtml = cmmiId ? `<div>📄 CMMI/ISO Certificate: <span class="text-green">✓ Uploaded</span> <button class="btn btn-outline btn-sm" onclick="viewFile(${cmmiId})">View</button></div>` : `<div>📄 CMMI/ISO Certificate: <span class="text-red">Not uploaded</span></div>`;
+
     document.getElementById('page-company-profile').innerHTML = `
       <div class="page-header"><div><div class="page-title">Company Profile</div></div></div>
       <div class="card">
@@ -334,12 +411,37 @@ async function initCompanyProfile() {
         <div class="form-group">
           <label>Uploaded Documents</label>
           <div style="font-size:13px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
-            <div>📄 Registration Certificate: ${profile.regCertDoc?'<span class="text-green">✓ Uploaded</span>':'<span class="text-red">Not uploaded</span>'}</div>
-            <div style="margin-top:4px">📄 CMMI/ISO Certificate: ${profile.cmmiDoc?'<span class="text-green">✓ Uploaded</span>':'<span class="text-red">Not uploaded</span>'}</div>
+            ${regHtml}
+            <div style="margin-top:4px">${cmmiHtml}</div>
+            <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+              <input id="cp-reg-input" type="file" style="display:none" onchange="companyUploadCert('reg', this)" />
+              <button id="cp-reg-btn" class="btn btn-outline btn-sm" onclick="document.getElementById('cp-reg-input').click()">Upload Registration Cert</button>
+              <input id="cp-cmmi-input" type="file" style="display:none" onchange="companyUploadCert('cmmi', this)" />
+              <button id="cp-cmmi-btn" class="btn btn-outline btn-sm" onclick="document.getElementById('cp-cmmi-input').click()">Upload CMMI/ISO Cert</button>
+              <span id="cp-upload-status" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
+            </div>
+            <div id="cp-dropzone" style="margin-top:8px;padding:8px;border:1px dashed var(--border);border-radius:6px;text-align:center;font-size:12px;color:var(--muted)">Drag & drop documents here to upload (reg / cmmi)</div>
           </div>
         </div>
         <button class="btn btn-primary" onclick="saveCompanyProfile()">Save Changes</button>
       </div>`;
+
+    // attach enhanced drag/drop handlers (supports multiple files)
+    const dz = document.getElementById('cp-dropzone');
+    if (dz) {
+      dz.ondragover = (e) => { e.preventDefault(); dz.style.background = 'rgba(0,0,0,0.02)'; };
+      dz.ondragleave = (e) => { dz.style.background = ''; };
+      dz.ondrop = (e) => {
+        e.preventDefault(); dz.style.background = '';
+        const files = (e.dataTransfer && e.dataTransfer.files) ? Array.from(e.dataTransfer.files) : [];
+        if (!files.length) return showToast('No files detected in drop.', 'error');
+        for (const f of files) {
+          const name = (f.name || '').toLowerCase();
+          const type = name.includes('cmmi') || name.includes('iso') ? 'cmmi' : (name.includes('reg') || name.includes('certificate') || name.endsWith('.pdf') ? 'reg' : 'reg');
+          companyUploadCert(type, f);
+        }
+      };
+    }
   } catch(e) {
     showToast(e.message, 'error');
     document.getElementById('page-company-profile').innerHTML =
@@ -349,7 +451,58 @@ async function initCompanyProfile() {
 
 async function saveCompanyProfile() {
   try {
-    await api.updateProfile({ name:document.getElementById('cp-name').value, city:document.getElementById('cp-city').value }, 'Bearer ' + (localStorage.getItem('ib_token') || ''));
+    await api.updateProfile({ name:document.getElementById('cp-name').value, city:document.getElementById('cp-city').value }, _companyAuth());
     showToast('Profile updated!', 'success');
   } catch(e) { showToast(e.message, 'error'); }
+}
+
+// Upload company registration / cmmi documents
+async function companyUploadCert(type, inputOrFile) {
+  let file = null;
+  if (!inputOrFile) return showToast('No file selected.', 'error');
+  if (inputOrFile.files && inputOrFile.files[0]) file = inputOrFile.files[0];
+  else if (inputOrFile instanceof File) file = inputOrFile;
+  else return showToast('Invalid file input.', 'error');
+  if (file.size > 6 * 1024 * 1024) return showToast('File too large. Max 6MB allowed.', 'error');
+    try {
+      // disable buttons and show status
+      const statusEl = document.getElementById('cp-upload-status');
+      const regBtn = document.getElementById('cp-reg-btn');
+      const cmmiBtn = document.getElementById('cp-cmmi-btn');
+      if (regBtn) regBtn.disabled = true;
+      if (cmmiBtn) cmmiBtn.disabled = true;
+      if (statusEl) statusEl.textContent = 'Uploading...';
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const base64 = e.target.result;
+          let tok = await (window.getAuthToken ? window.getAuthToken() : (authToken || localStorage.getItem('ib_token')));
+          if (typeof tok === 'string' && tok.startsWith('Bearer ')) tok = tok.split(' ')[1];
+          const headers = { 'Content-Type': 'application/json' };
+          if (tok) headers['Authorization'] = 'Bearer ' + tok;
+          const prefix = type === 'cmmi' ? 'cmmi_cert_' : 'reg-cert_';
+          const fileName = prefix + Date.now() + '.' + (file.name.split('.').pop() || 'pdf');
+          const uploadRes = await fetch('/api/profile/upload', {
+            method: 'POST', headers, body: JSON.stringify({ fileName, fileType: file.type, base64 })
+          });
+          if (!uploadRes.ok) {
+            const body = await uploadRes.json().catch(() => ({}));
+            showToast(body.error || 'Upload failed.', 'error');
+            if (statusEl) statusEl.textContent = '';
+            return;
+          }
+          const uploadData = await uploadRes.json().catch(() => ({}));
+          showToast('Document uploaded!', 'success');
+          if (statusEl) statusEl.textContent = `Uploaded: ${uploadData.fileName || file.name}`;
+          // refresh the profile to show the updated document preview button
+          setTimeout(() => { initCompanyProfile(); if (statusEl) statusEl.textContent = ''; }, 800);
+        } catch (err) { showToast('Upload failed: ' + err.message, 'error'); }
+        finally {
+          if (regBtn) regBtn.disabled = false;
+          if (cmmiBtn) cmmiBtn.disabled = false;
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (e) { showToast('Upload failed: ' + e.message, 'error'); }
 }

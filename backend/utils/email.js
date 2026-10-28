@@ -8,9 +8,12 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  pool: true,
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
   tls: { ciphers: 'TLSv1.2' }
 });
+
+transporter.on('error', err => console.error('Email transporter error:', err));
 
 async function init() {
   try {

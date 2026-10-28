@@ -1,4 +1,4 @@
-// university.js — University Admin portal
+// university.js — University portal
 
 async function initUniDashboard() {
   try {
@@ -7,7 +7,7 @@ async function initUniDashboard() {
     const openC   = complaints.filter(c=>c.status==='open');
     document.getElementById('page-uni-dashboard').innerHTML = `
       <div class="page-header">
-        <div><div class="page-title">University Admin Panel</div>
+        <div><div class="page-title">University Panel</div>
           <div class="page-subtitle">Riphah International University · Faculty of Computing</div>
         </div>
       </div>
@@ -34,11 +34,11 @@ async function initUniDashboard() {
       <div class="stat-grid">
         <div class="stat-card green"><div class="stat-num">${stats.verifiedCompanies}</div><div class="stat-label">Verified Companies</div></div>
         <div class="stat-card gold"><div class="stat-num">${stats.pendingCompanies}</div><div class="stat-label">Pending Verification</div></div>
-        <div class="stat-card"><div class="stat-num">${stats.riphahApproved}</div><div class="stat-label">Approved Posts</div></div>
+        <div class="stat-card"><div class="stat-num">${stats.sysadminApproved}</div><div class="stat-label">Approved Posts</div></div>
         <div class="stat-card muted"><div class="stat-num">${stats.openInternships}</div><div class="stat-label">Open Internships</div></div>
       </div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-num">${stats.approvedStudents}</div><div class="stat-label">Verified Students</div></div>
+        <div class="stat-card"><div class="stat-num">${stats.verifiedStudents}</div><div class="stat-label">Verified Students</div></div>
         <div class="stat-card gold"><div class="stat-num">${stats.pendingStudents}</div><div class="stat-label">Students Pending</div></div>
         <div class="stat-card green"><div class="stat-num">${stats.confirmedApplications}</div><div class="stat-label">Confirmed Interns</div></div>
         <div class="stat-card red"><div class="stat-num">${openC.length}</div><div class="stat-label">Open Complaints</div></div>
@@ -107,15 +107,14 @@ async function initVerifyStudents() {
     document.getElementById('page-verify-students').innerHTML = `
       <div class="page-header"><div>
         <div class="page-title">Student Verification</div>
-        <div class="page-subtitle">Verify student eligibility against Riphah criteria based on their uploaded transcript and enrollment letter</div>
+        <div class="page-subtitle">Verify student eligibility against Riphah criteria based on their uploaded transcript</div>
       </div></div>
       ${!students.length?`<div class="empty-state card"><div class="icon">✅</div><p>No students pending verification.</p></div>`:''}
       ${students.map(s=>{
         const issues=[];
         if((s.creditHours||0)<60) issues.push('Credit hours: '+(s.creditHours||0)+'/60 required');
         if((s.cgpa||0)<2.0)       issues.push('CGPA: '+(s.cgpa||0)+' (minimum 2.0)');
-        if(!s.electiveCourse)      issues.push('No elective course listed');
-        const ok=issues.length===0;
+        const ok = true;
         return `<div class="card" style="border-top:3px solid ${ok?'var(--green)':'var(--gold)'}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
             <div>
@@ -124,15 +123,12 @@ async function initVerifyStudents() {
               <div style="margin-top:8px;display:flex;gap:16px;font-size:13px">
                 <span style="color:${(s.cgpa||0)>=2.0?'var(--green)':'var(--red)'}"><strong>CGPA:</strong> ${s.cgpa||'—'}</span>
                 <span style="color:${(s.creditHours||0)>=60?'var(--green)':'var(--red)'}"><strong>Credits:</strong> ${s.creditHours||'—'}/60</span>
-                <span><strong>Elective:</strong> ${s.electiveCourse||'—'}</span>
               </div>
               <div style="margin-top:6px;font-size:12px">
                 <strong>Documents:</strong>
                 ${s.transcriptDoc?'<span class="text-green">✓ Transcript</span>':'<span class="text-red">✗ No Transcript</span>'}
-                &nbsp;
-                ${s.enrollmentDoc?'<span class="text-green">✓ Enrollment Letter</span>':'<span class="text-red">✗ No Enrollment Letter</span>'}
               </div>
-              ${s.transcriptDoc?`<div style="margin-top:6px"><a class="btn btn-outline btn-sm" href="${s.transcriptDoc}" target="_blank" download="transcript_${s.name}.pdf">📄 View Transcript</a></div>`:''}
+              ${s.transcriptDoc?`<div style="margin-top:6px"><button class="btn btn-outline btn-sm" onclick="openBase64('${encodeURIComponent(s.transcriptDoc)}','Transcript — ${s.name}')">📄 View Transcript</button></div>`:''}
             </div>
             <div>
               ${ok?'<span class="chip-ok">✓ Meets all criteria</span>':issues.map(i=>`<div class="chip-warn" style="margin-bottom:4px">⚠ ${i}</div>`).join('')}
@@ -174,6 +170,7 @@ async function verifyStudentAction(id, status, note) {
 async function initVerifyCompanies() {
   try {
     const companies = await api.getCompanies();
+    console.log('DEBUG pending companies (raw):', companies);
     document.getElementById('page-verify-companies').innerHTML = `
       <div class="page-header"><div>
         <div class="page-title">Company Verification</div>
@@ -181,11 +178,18 @@ async function initVerifyCompanies() {
       </div></div>
       ${!companies.length?`<div class="empty-state card"><div class="icon">🏢</div><p>No companies registered yet.</p></div>`:''}
       ${companies.map(c=>{
-        const regId=[c.pasha,c.pseb,c.secp].filter(Boolean).join(', ')||null;
+        // Prefer explicit provider fields; fall back to unified registrationType/registrationId
+        const regProviders = [c.pasha, c.pseb, c.secp].filter(v => v !== undefined && v !== null && String(v).trim() !== '');
+        let regId = regProviders.join(', ');
+        if (!regId) {
+          // older/newer records might use registrationType + registrationId
+          if (c.registrationType && c.registrationId) regId = c.registrationType + ' — ' + c.registrationId;
+          else regId = null;
+        }
         const criteriaChecks=[
           {label:'Registration ID (P@SHA/PSEB/SECP)', ok:!!regId, val:regId||'Not provided'},
           {label:'CMMI / ISO Certification',          ok:!!c.cmmi, val:c.cmmi||'Not provided'},
-          {label:'Years Operational',                 ok:!!c.operational, val:c.operational||'Not stated'},
+          {label:'Year of Registration',              ok:!!c.operational, val: c.operational || 'Not stated'},
           {label:'Registration Certificate',          ok:!!c.regCertDoc, val:c.regCertDoc?'Uploaded':'Missing'},
           {label:'CMMI/ISO Certificate Doc',          ok:!!c.cmmiDoc, val:c.cmmiDoc?'Uploaded':'Missing'},
         ];
@@ -206,8 +210,8 @@ async function initVerifyCompanies() {
                 <span style="color:var(--muted)">${ch.val}</span>
               </div>`).join('')}
           </div>
-          ${c.regCertDoc?`<div style="margin-bottom:10px"><a class="btn btn-outline btn-sm" href="${c.regCertDoc}" target="_blank" download="reg_cert_${c.name}.pdf">📄 View Registration Certificate</a> `:''}
-          ${c.cmmiDoc?`<a class="btn btn-outline btn-sm" href="${c.cmmiDoc}" target="_blank" download="cmmi_${c.name}.pdf">📄 View CMMI/ISO Certificate</a></div>`:''}
+          ${c.regCertDoc?`<div style="margin-bottom:10px"><button class="btn btn-outline btn-sm" onclick="openBase64('${encodeURIComponent(c.regCertDoc)}','Registration Certificate — ${c.name}')">📄 View Registration Certificate</button> `:''}
+          ${c.cmmiDoc?`<button class="btn btn-outline btn-sm" onclick="openBase64('${encodeURIComponent(c.cmmiDoc)}','CMMI/ISO Certificate — ${c.name}')">📄 View CMMI/ISO Certificate</button></div>`:''}
           ${c.status==='pending'?`
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <button class="btn btn-success" onclick="verifyCompany(${c.id},'verified','')">✓ Approve Company</button>
@@ -256,8 +260,10 @@ async function initApproveInternships() {
       </div>
       ${!internships.length?`<div class="empty-state card"><div class="icon">📌</div><p>No internship posts yet.</p></div>`:''}
       ${internships.map(i=>{
-        const ok=i.eligibilityIssues&&i.eligibilityIssues.length===0;
-        return `<div class="internship-card" style="flex-direction:column;align-items:stretch">
+        const issues = i.eligibilityIssues || [];
+        const ok = (issues.length === 0);
+        const issuesEncoded = encodeURIComponent(JSON.stringify(issues));
+        return `<div class="internship-card" data-intern-id="${i.id}" data-issues="${issuesEncoded}" style="flex-direction:column;align-items:stretch">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
             <div>
               <div class="title">${i.title}
@@ -273,12 +279,12 @@ async function initApproveInternships() {
             </div>
           </div>
           ${i.description?`<p style="font-size:12px;color:var(--muted);margin-bottom:8px">${i.description}</p>`:''}
-          ${ok?'<div style="margin-bottom:8px"><span class="chip-ok">✓ Meets all Riphah criteria</span></div>':
-            `<div style="margin-bottom:8px">${(i.eligibilityIssues||[]).map(x=>`<span class="chip-warn" style="margin-right:4px">⚠ ${x}</span>`).join('')}</div>`}
+          ${ok?`<div style="margin-bottom:8px"><span class="chip-ok">✓ Meets all Riphah criteria</span></div>`:
+            `<div style="margin-bottom:8px">${issues.map(x=>`<div class="alert alert-danger" style="margin-bottom:6px"><span class="alert-icon">✗</span> ${x}</div>`).join('')}</div>`}
           ${i.rejectionNote?`<div style="font-size:12px;color:var(--red);margin-bottom:8px">Rejection reason: ${i.rejectionNote}</div>`:''}
           ${!i.riphahApproved&&i.status==='open'?`
             <div style="display:flex;gap:10px">
-              ${ok?`<button class="btn btn-success btn-sm" onclick="approveInternship(${i.id})">✓ Approve Post</button>`:''}
+              <button class="btn btn-success btn-sm" onclick="${ok?`approveInternship(${i.id})`:`openApproveOverrideModal(${i.id})`}">✓ Approve Post</button>
               <button class="btn btn-danger btn-sm" onclick="openRejectInternshipModal(${i.id})">✗ Reject Post</button>
             </div>`:''}
         </div>`;
@@ -309,18 +315,64 @@ async function rejectInternshipAction(id) {
   } catch(e) { showToast(e.message,'error'); }
 }
 
-async function approveInternship(id) {
+async function approveInternship(id, overrideReason) {
   try {
-    await api.approveInternship(id);
+    await api.approveInternship(id, overrideReason);
     showToast('Internship approved! Students can now apply.','success');
     initApproveInternships();
   } catch(e) { showToast(e.message,'error'); }
 }
 
+function openApproveOverrideModal(id) {
+  const el = document.querySelector(`[data-intern-id="${id}"]`);
+  let issues = [];
+  if (el && el.dataset && el.dataset.issues) {
+    try { issues = JSON.parse(decodeURIComponent(el.dataset.issues)); } catch(e) { issues = []; }
+  }
+  openModal(`
+    <h3>Approve Internship — Potential Issues</h3>
+    ${issues.length ? issues.map(x=>`<div class="alert alert-danger" style="margin-bottom:6px"><span class="alert-icon">✗</span> ${x}</div>`).join('') : '<div class="alert alert-info">No issues listed.</div>'}
+    <div style="margin-top:12px">Are you sure you want to approve this post despite the issues? Optionally provide a short reason for the override.</div>
+    <div class="form-group" style="margin-top:8px"><label>Override Reason (optional)</label>
+      <textarea id="override-reason" placeholder="e.g. Company provided CMMI certification during call; admin verified manually."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-success" onclick="approveWithOverride(${id})">Approve Anyway</button>
+    </div>`);
+}
+
+async function approveWithOverride(id) {
+  try {
+    const reasonEl = document.getElementById('override-reason');
+    const reason = reasonEl ? reasonEl.value.trim() : '';
+    closeModal();
+    await approveInternship(id, reason || null);
+  } catch(e) { showToast(e.message || 'Failed to approve.','error'); }
+}
+
 // ── SELF-FOUND REVIEW ────────────────────────────────────────────
 async function initSelfFoundReview() {
   try {
-    const sfs = await api.getAllSelfFoundInternships();
+    const sfsRaw = await api.getAllSelfFoundInternships();
+    // Normalize keys: accept both camelCase (from mapped API) and snake_case (raw DB rows)
+    const sfs = (sfsRaw || []).map(sf => ({
+      id: sf.id || sf.id,
+      studentName: sf.studentName || sf.student_name || sf.student_name || '—',
+      companyName: sf.companyName || sf.company_name || '—',
+      companyWebsite: sf.companyWebsite || sf.company_website || '',
+      supervisorName: sf.supervisorName || sf.supervisor_name || '—',
+      supervisorEmail: sf.supervisorEmail || sf.supervisor_email || '—',
+      startDate: sf.startDate || sf.start_date || sf.start_date || null,
+      endDate: sf.endDate || sf.end_date || sf.end_date || null,
+      stipend: sf.stipend || sf.stipend || '—',
+      workDescription: sf.workDescription || sf.work_description || '—',
+      offerLetterDoc: sf.offerLetterDoc || sf.offer_letter_doc || null,
+      status: sf.status || sf.status || 'pending',
+      adminNote: sf.adminNote || sf.admin_note || '',
+      submittedAt: sf.submittedAt || sf.submitted_at || sf.submitted_at || null,
+      reviewedAt: sf.reviewedAt || sf.reviewed_at || null,
+    }));
     document.getElementById('page-self-found-review').innerHTML = `
       <div class="page-header"><div>
         <div class="page-title">Self-Found Internship Review</div>
@@ -332,7 +384,7 @@ async function initSelfFoundReview() {
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
             <div>
               <div style="font-weight:700;font-size:15px">${sf.studentName}</div>
-              <div style="font-size:12px;color:var(--muted)">Submitted: ${new Date(sf.submittedAt).toLocaleDateString()}</div>
+              <div style="font-size:12px;color:var(--muted)">Submitted: ${sf.submittedAt ? (new Date(sf.submittedAt).toLocaleDateString() || 'Invalid Date') : '—'}</div>
             </div>
             ${badge(sf.status)}
           </div>
@@ -341,12 +393,12 @@ async function initSelfFoundReview() {
             <div><strong>Website:</strong> ${sf.companyWebsite||'—'}</div>
             <div><strong>Supervisor:</strong> ${sf.supervisorName}</div>
             <div><strong>Supervisor Email:</strong> ${sf.supervisorEmail}</div>
-            <div><strong>Start Date:</strong> ${sf.startDate}</div>
-            <div><strong>End Date:</strong> ${sf.endDate}</div>
+            <div><strong>Start Date:</strong> ${sf.startDate ? (new Date(sf.startDate).toLocaleDateString()||sf.startDate) : 'undefined'}</div>
+            <div><strong>End Date:</strong> ${sf.endDate ? (new Date(sf.endDate).toLocaleDateString()||sf.endDate) : 'undefined'}</div>
             <div><strong>Stipend:</strong> ${sf.stipend}</div>
           </div>
           <div style="font-size:13px;margin-bottom:12px"><strong>Work Description:</strong><br>${sf.workDescription}</div>
-          ${sf.offerLetterDoc?`<div style="margin-bottom:12px"><a class="btn btn-outline btn-sm" href="${sf.offerLetterDoc}" target="_blank" download="offer_${sf.studentName}.pdf">📄 View Offer Letter</a></div>`:'<div style="margin-bottom:12px;font-size:12px;color:var(--red)">⚠ No offer letter uploaded</div>'}
+          ${sf.offerLetterDoc?`<div style="margin-bottom:12px"><button class="btn btn-outline btn-sm" onclick="openBase64('${encodeURIComponent(sf.offerLetterDoc)}','Offer Letter — ${sf.studentName}')">📄 View Offer Letter</button></div>`:'<div style="margin-bottom:12px;font-size:12px;color:var(--red)">⚠ No offer letter uploaded</div>'}
           ${sf.adminNote?`<div class="alert alert-info" style="margin-bottom:10px"><span class="alert-icon">💬</span> <strong>Admin Note:</strong> ${sf.adminNote}</div>`:''}
           ${sf.status==='pending'?`
             <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -438,8 +490,8 @@ async function viewStudentDetails(studentId) {
           <div class="detail-row"><div class="detail-label">Credit Hours</div><div class="detail-value"><strong style="color:${(d.creditHours||0)>=60?'var(--green)':'var(--red)'}">${d.creditHours||'—'} / 60 required</strong></div></div>
           <div class="detail-row"><div class="detail-label">Elective Course</div><div class="detail-value">${d.electiveCourse||'—'}</div></div>
           <div class="detail-row"><div class="detail-label">Skills</div><div class="detail-value">${d.skills||'—'}</div></div>
-          <div class="detail-row"><div class="detail-label">Transcript</div><div class="detail-value">${d.transcriptDoc?`<a href="${d.transcriptDoc}" target="_blank" download="transcript_${d.name}.pdf" class="btn btn-outline btn-sm">📄 Download</a>`:'<span class="text-red">Not uploaded</span>'}</div></div>
-          <div class="detail-row"><div class="detail-label">Enrollment Letter</div><div class="detail-value">${d.enrollmentDoc?`<a href="${d.enrollmentDoc}" target="_blank" download="enrollment_${d.name}.pdf" class="btn btn-outline btn-sm">📄 Download</a>`:'<span class="text-red">Not uploaded</span>'}</div></div>
+          <div class="detail-row"><div class="detail-label">Transcript</div><div class="detail-value">${d.transcriptDoc?`<button onclick="openBase64('${encodeURIComponent(d.transcriptDoc)}','Transcript — ${d.name}')" class="btn btn-outline btn-sm">📄 View</button>`:'<span class="text-red">Not uploaded</span>'}</div></div>
+          <div class="detail-row"><div class="detail-label">Enrollment Letter</div><div class="detail-value">${d.enrollmentDoc?`<button onclick="openBase64('${encodeURIComponent(d.enrollmentDoc)}','Enrollment Letter — ${d.name}')" class="btn btn-outline btn-sm">📄 View</button>`:'<span class="text-red">Not uploaded</span>'}</div></div>
         </div>
       </div>
       <div class="card" style="border-top:3px solid ${elig.length?'var(--red)':'var(--green)'}">
@@ -462,6 +514,9 @@ async function viewStudentDetails(studentId) {
             <strong style="font-size:13px">${f.subject}</strong>
             <span style="font-size:11px;color:var(--muted);margin-left:8px">${new Date(f.sentAt).toLocaleDateString()}</span>
             <p style="font-size:12px;color:var(--text2);margin-top:4px">${f.message}</p>
+            <div style="margin-top:6px">
+              <button class="btn btn-outline btn-sm" onclick="(async()=>{ if (!confirm('Delete this feedback?')) return; try{ await api.deleteFeedback(${f.id}); showToast('Feedback deleted.','info'); viewStudentDetails(${studentId}); } catch(e){ showToast(e.message,'error'); } })()">Delete</button>
+            </div>
           </div>`).join('')}
         <div style="margin-top:16px">
           <button class="btn btn-primary btn-sm" onclick="openSendFeedbackModal(${studentId},'${d.name}')">Send Feedback</button>
@@ -581,8 +636,8 @@ async function resolveComplaint(id) {
 // ── SEND FEEDBACK ────────────────────────────────────────────────
 async function initSendFeedback() {
   try {
-    const users    = await api.getUsers();
-    const students = users.filter(u=>u.role==='student');
+    const users    = await api.getStudentsList();
+    const students = Array.isArray(users) ? users : (users.filter ? users.filter(u=> u.role === 'student' && u.accountStatus === 'verified') : []);
     document.getElementById('page-send-feedback').innerHTML = `
       <div class="page-header"><div>
         <div class="page-title">Send Feedback to Students</div>

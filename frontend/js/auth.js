@@ -1,144 +1,89 @@
-// auth.js — InternBridge v4  (Role-first auth flow)
+// auth.js — InternBridge v4 (shared auth flow)
 let currentUser = null;
 let authToken   = null;
 
+const ROLE_PAGES = {
+  student: 'student.html',
+  company: 'company.html',
+  university: 'university.html',
+  sysadmin: 'sysadmin.html'
+};
+
 // ── STARTUP ───────────────────────────────────────────────────
 function showRoleSelectScreen() {
-  document.getElementById('login-page').style.display    = 'flex';
+  document.getElementById('login-page').style.display = 'flex';
   document.getElementById('register-page').style.display = 'none';
   document.getElementById('app').classList.remove('visible');
-
-  document.getElementById('login-page').innerHTML = `
-    <div class="auth-brand">
-      <div class="auth-logo">Intern<span>Bridge</span></div>
-      <div class="auth-tagline">Riphah International University · Faculty of Computing</div>
-    </div>
-    <div class="auth-card" style="max-width:480px;width:100%">
-      <div class="auth-card-header">
-        <h2>Who are you?</h2>
-        <p>Select your role to continue</p>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px">
-        ${[['🎓','Student','student','Apply for internships'],
-           ['🏢','Company','company','Post internship listings'],
-           ['🏛️','University Admin','university','Manage students & companies'],
-           ['⚙️','System Admin','sysadmin','System & approvals']
-          ].map(([icon,label,role,desc])=>`
-          <div onclick="showLoginScreen('${role}')"
-            style="border:2px solid var(--border);border-radius:14px;padding:24px 14px 20px;
-                   text-align:center;cursor:pointer;transition:all .18s;background:var(--surface)"
-            onmouseover="this.style.borderColor='#2563eb';this.style.transform='translateY(-2px)'"
-            onmouseout="this.style.borderColor='var(--border)';this.style.transform='none'">
-            <div style="font-size:34px;margin-bottom:10px">${icon}</div>
-            <div style="font-size:14px;font-weight:700">${label}</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:5px">${desc}</div>
-          </div>`).join('')}
-      </div>
-    </div>
-    <div class="auth-footer"><span>© 2025 Riphah International University · InternBridge</span></div>`;
 }
 
-// ── PER-ROLE LOGIN SCREEN ─────────────────────────────────────
-function showLoginScreen(role) {
-  const info = {
-    student:    {label:'Student',          icon:'🎓', reg:true },
-    company:    {label:'Company',          icon:'🏢', reg:true },
-    university: {label:'University Admin', icon:'🏛️', reg:false},
-    sysadmin:   {label:'System Admin',     icon:'⚙️', reg:false},
-  }[role];
-
-  document.getElementById('login-page').style.display    = 'flex';
-  document.getElementById('register-page').style.display = 'none';
-
-  document.getElementById('login-page').innerHTML = `
-    <div class="auth-brand">
-      <div class="auth-logo">Intern<span>Bridge</span></div>
-      <div class="auth-tagline">Riphah International University · Faculty of Computing</div>
-    </div>
-    <div class="auth-card" style="max-width:440px;width:100%">
-      <button onclick="showRoleSelectScreen()"
-        style="display:flex;align-items:center;gap:6px;background:none;border:none;
-               color:var(--muted);font-size:12px;cursor:pointer;padding:0;margin-bottom:18px">
-        ← Back to role selection
-      </button>
-      <div class="auth-card-header" style="margin-bottom:20px">
-        <div style="font-size:28px;margin-bottom:6px">${info.icon}</div>
-        <h2>${info.label}</h2>
-        <p>Sign in to your account</p>
-      </div>
-      <div class="form-group">
-        <label>Email Address</label>
-        <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email"
-          onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()" />
-      </div>
-      <div class="form-group" style="position:relative">
-        <label>Password</label>
-        <input type="password" id="login-password" placeholder="••••••••"
-          onkeydown="if(event.key==='Enter')doLogin('${role}')" />
-        <span onclick="togglePwd('login-password',this)"
-          style="position:absolute;right:11px;top:34px;cursor:pointer;font-size:15px;color:var(--muted)">👁</span>
-      </div>
-      <div style="text-align:right;margin-top:8px;font-size:13px;color:var(--muted)"><a onclick="openForgotModal()" style="color:#2563eb;cursor:pointer">Forgot password?</a></div>
-      </div>
-      <button class="btn btn-primary" id="login-btn" onclick="doLogin('${role}')">Sign In →</button>
-      ${info.reg ? `
-        <div style="text-align:center;margin-top:20px;font-size:13px;color:var(--muted)">
-          Don't have an account?
-          <a onclick="showRegisterScreen('${role}')"
-            style="color:#2563eb;cursor:pointer;font-weight:600;margin-left:4px">Create Account</a>
-        </div>` : ''}
-    </div>
-    <div class="auth-footer"><span>© 2025 Riphah International University · InternBridge</span></div>`;
+function showLoginScreen() {
+  showRoleSelectScreen();
 }
 
-// ── DO LOGIN ──────────────────────────────────────────────────
-async function doLogin(role) {
-  const email    = document.getElementById('login-email').value.trim();
+function roleFromToken(token) {
+  try {
+    const encoded = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(encoded));
+    return payload.role;
+  } catch (_) {
+    return null;
+  }
+}
+
+function redirectByRole(role) {
+  const page = ROLE_PAGES[role];
+  if (!page) throw new Error('This account has an unsupported role.');
+  window.location.href = page;
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
-  const btn      = document.getElementById('login-btn');
+  const btn = document.getElementById('login-btn');
   if (!email || !password) return showToast('Please enter email and password.', 'error');
-  btn.disabled = true; btn.textContent = 'Signing in…';
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
   try {
     const data = await api.login(email, password);
-    if (data.user.role !== role)
-      throw new Error(`This account belongs to role "${data.user.role}". Go back and select the correct role.`);
+    const role = roleFromToken(data.token) || data.user.role;
     authToken = data.token;
     currentUser = data.user;
-    if (authToken) localStorage.setItem('ib_token', authToken);
-    else localStorage.removeItem('ib_token');
+    localStorage.setItem('ib_token', authToken);
     localStorage.setItem('ib_user', JSON.stringify(currentUser));
-    initApp();
+    redirectByRole(role);
   } catch(e) {
     showToast(e.message, 'error');
-    btn.disabled = false; btn.textContent = 'Sign In →';
+    btn.disabled = false;
+    btn.textContent = 'Login';
   }
 }
 
 // ── REGISTER SCREEN ───────────────────────────────────────────
-function showRegisterScreen(role) {
-  document.getElementById('login-page').style.display    = 'none';
+function showRegisterScreen(role = 'student') {
+  const selectedRole = role === 'company' ? 'company' : 'student';
+  document.getElementById('login-page').style.display = 'none';
   document.getElementById('register-page').style.display = 'flex';
   document.getElementById('register-page').classList.add('visible');
 
-  const backBtn = `<button onclick="showLoginScreen('${role}');document.getElementById('register-page').style.display='none';document.getElementById('login-page').style.display='flex';"
-    style="display:flex;align-items:center;gap:6px;background:none;border:none;
-           color:var(--muted);font-size:12px;cursor:pointer;padding:0;margin-bottom:18px">
-    ← Back to sign in</button>`;
+  const roleSelect = document.getElementById('register-role');
+  if (roleSelect) roleSelect.value = selectedRole;
 
   const title = document.getElementById('register-title');
-  const tabs  = document.getElementById('register-type-tabs');
-  const cont  = document.getElementById('register-form-container');
+  const tabs = document.getElementById('register-type-tabs');
+  const container = document.getElementById('register-form-container');
 
-  if (tabs)  tabs.innerHTML = '';
-  if (title) title.textContent = role === 'student' ? 'Student Registration' : 'Company Registration';
-  cont.innerHTML = backBtn + (role === 'student' ? _studentForm() : _companyForm());
+  if (tabs) tabs.innerHTML = '';
+  if (title) title.textContent = 'Create account';
+  container.innerHTML = selectedRole === 'student' ? _studentForm() : _companyForm();
+  try { attachRegisterFormValidation(); } catch (e) { console.warn('register validation attach failed', e); }
 }
 
 // ── STUDENT FORM ──────────────────────────────────────────────
 function _studentForm() { return `
   <div class="alert alert-info"><span class="alert-icon">ℹ️</span>
     <div>Eligibility: minimum 60 credit hours, CGPA ≥ 2.0, and an available elective course.
-    University admin will verify your account before you can log in.</div>
+    University will verify your account before you can log in.</div>
   </div>
   <div class="form-row">
     <div class="form-group"><label>Full Name *</label><input id="r-name" type="text" placeholder="e.g. Ahmed Raza" /></div>
@@ -152,7 +97,6 @@ function _studentForm() { return `
   </div>
   <div class="form-row">
     <div class="form-group"><label>Completed Credit Hours *</label><input id="r-credits" type="number" placeholder="e.g. 96" /></div>
-    <div class="form-group"><label>Elective Course *</label><input id="r-elective" type="text" placeholder="e.g. Web Engineering" /></div>
   </div>
   <div class="form-group"><label>Skills</label><input id="r-skills" type="text" placeholder="e.g. React, Python" /></div>
   <div class="form-group"><label>Email Address *</label><input id="r-email" type="email" placeholder="your@riphah.edu.pk" /></div>
@@ -160,6 +104,7 @@ function _studentForm() { return `
     <div class="form-group" style="position:relative"><label>Password *</label>
       <input id="r-pass" type="password" placeholder="Min 6 characters" />
       <span onclick="togglePwd('r-pass',this)" style="position:absolute;right:10px;top:34px;cursor:pointer;font-size:14px;color:var(--muted)">👁</span>
+      <div id="r-pass-help" style="font-size:12px;color:var(--muted);margin-top:6px">Password must be at least 6 characters.</div>
     </div>
     <div class="form-group"><label>Confirm Password *</label><input id="r-pass2" type="password" placeholder="Repeat password" /></div>
   </div>
@@ -171,35 +116,64 @@ function _studentForm() { return `
     </div>
     <div id="r-transcript-preview" style="font-size:12px;color:var(--green);margin-top:4px"></div>
   </div>
-  <div class="form-group">
-    <label>Enrollment Letter (PDF/Image) *</label>
-    <div class="upload-box" onclick="document.getElementById('r-enrollment').click()">
-      📎 Click to upload your enrollment letter
-      <input id="r-enrollment" type="file" accept=".pdf,.jpg,.png" style="display:none" onchange="previewUpload(this,'r-enrollment-preview')" />
-    </div>
-    <div id="r-enrollment-preview" style="font-size:12px;color:var(--green);margin-top:4px"></div>
-  </div>
   <button class="btn btn-primary btn-full" id="reg-submit-btn" onclick="registerStudent()">Create Student Account →</button>`; }
+
+// Attach simple real-time validation to registration fields after render
+function attachRegisterFormValidation() {
+  const emailEl = document.getElementById('r-email');
+  const passEl = document.getElementById('r-pass');
+  const passHelp = document.getElementById('r-pass-help');
+  if (emailEl) {
+    emailEl.addEventListener('input', () => {
+      const val = emailEl.value.trim();
+      const ok = validateEmail(val);
+      if (val && !ok) emailEl.style.borderColor = '#dc2626'; else emailEl.style.borderColor = '';
+    });
+  }
+  if (passEl && passHelp) {
+    passEl.addEventListener('input', () => {
+      if (passEl.value.length < 6) {
+        passHelp.textContent = 'Password must be at least 6 characters.';
+        passHelp.style.color = '#dc2626';
+      } else {
+        passHelp.textContent = 'Looks good.';
+        passHelp.style.color = 'var(--green)';
+      }
+    });
+  }
+}
+
+function validateEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  // Basic RFC 5322-ish regex (reasonable for client-side). Backend still enforces uniqueness.
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+}
 
 // ── COMPANY FORM ──────────────────────────────────────────────
 function _companyForm() { return `
   <div class="alert alert-warning"><span class="alert-icon">⚠️</span>
     <div>Only software/IT companies registered with P@SHA/PSEB/SECP with CMMI Level 2+ or ISO
-    certification are eligible. Account requires university admin approval.</div>
+    certification are eligible. Account requires university approval.</div>
   </div>
   <div class="form-group"><label>Company Name *</label><input id="r-name" type="text" placeholder="e.g. TechCorp Pvt Ltd" /></div>
   <div class="form-row">
     <div class="form-group"><label>City *</label>
       <select id="r-city"><option value="">Select City</option><option>Lahore</option><option>Karachi</option><option>Islamabad</option><option>Rawalpindi</option><option>Faisalabad</option><option>Peshawar</option></select>
     </div>
-    <div class="form-group"><label>Years Operational *</label><input id="r-ops" type="text" placeholder="e.g. 5 years" /></div>
+    <div class="form-group"><label>Year of Registration *</label><input id="r-year" type="number" placeholder="e.g. 2020" min="1900" max="2100" /></div>
   </div>
   <div class="form-row">
-    <div class="form-group"><label>P@SHA ID</label><input id="r-pasha" type="text" placeholder="P@SHA-2024-XXX" /></div>
-    <div class="form-group"><label>PSEB ID</label><input id="r-pseb" type="text" placeholder="PSEB-XXXX" /></div>
+    <div class="form-group"><label>Registration Type *</label>
+      <select id="r-registration-type">
+        <option value="PSEB">PSEB</option>
+        <option value="P@SHA">P@SHA</option>
+        <option value="SECP">SECP</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Registration ID *</label><input id="r-registration-id" type="text" placeholder="Enter registration ID" /></div>
   </div>
   <div class="form-row">
-    <div class="form-group"><label>SECP ID</label><input id="r-secp" type="text" placeholder="SECP-XXXX" /></div>
     <div class="form-group"><label>CMMI / ISO Certification *</label><input id="r-cmmi" type="text" placeholder="e.g. CMMI Level 2" /></div>
   </div>
   <div class="form-group"><label>Email Address *</label><input id="r-email" type="email" placeholder="hr@company.com" /></div>
@@ -281,28 +255,107 @@ async function registerStudent() {
   const password=document.getElementById('r-pass').value;
   const pass2=document.getElementById('r-pass2').value;
   if (!name||!email||!password) return showToast('Name, email and password are required.','error');
+  if (!validateEmail(email)) return showToast('Please enter a valid email address.','error');
   if (password!==pass2)         return showToast('Passwords do not match.','error');
   if (password.length<6)        return showToast('Password must be at least 6 characters.','error');
   const btn=document.getElementById('reg-submit-btn');
   btn.disabled=true; btn.textContent='Creating account…';
-  let transcriptDoc=null, enrollmentDoc=null;
+  let transcriptDoc=null;
   try {
     transcriptDoc=await readFileAsBase64(document.getElementById('r-transcript'));
-    enrollmentDoc=await readFileAsBase64(document.getElementById('r-enrollment'));
   } catch(e) { btn.disabled=false; btn.textContent='Create Student Account →'; return showToast('File error: '+e.message,'error'); }
   try {
     await api.registerStudent({
-      name,email,password,
+      name,email: email.toLowerCase(),password,
       program:document.getElementById('r-program').value,
       semester:document.getElementById('r-semester').value,
       cgpa:document.getElementById('r-cgpa').value,
       creditHours:document.getElementById('r-credits').value,
-      electiveCourse:document.getElementById('r-elective').value,
       skills:document.getElementById('r-skills').value,
-      transcriptDoc,enrollmentDoc,
+      transcriptDoc,
     });
-    showStudentPendingScreen();
+    showOTPVerificationScreen(email);
   } catch(e) { showToast(e.message,'error'); btn.disabled=false; btn.textContent='Create Student Account →'; }
+}
+
+// ── OTP VERIFICATION UI ──────────────────────────────────────
+function showOTPVerificationScreen(email) {
+  document.getElementById('register-page').style.display='none';
+  document.getElementById('login-page').style.display='flex';
+  document.getElementById('login-page').innerHTML = `
+    <div class="auth-brand">
+      <div class="auth-logo">Intern<span>Bridge</span></div>
+      <div class="auth-tagline">Riphah International University · Faculty of Computing</div>
+    </div>
+    <div class="auth-card" style="max-width:480px;width:100%;text-align:center">
+      <div style="font-size:46px;margin-bottom:12px">✉️</div>
+      <h2 style="margin-bottom:8px">Verify your email</h2>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:18px">Enter the 6-digit code we sent to <strong>${email}</strong></p>
+      <div class="form-group"><label>Verification Code</label><input id="otp-code" type="text" maxlength="6" placeholder="123456" /></div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+            <button class="btn btn-outline" onclick="showLoginScreen('student')">Cancel</button>
+            <button class="btn btn-primary" id="otp-submit-btn" onclick="submitOtp('${email}')">Verify Email</button>
+          </div>
+          <div style="margin-top:12px;text-align:center">
+            <button class="btn btn-link" id="resend-otp-btn" onclick="resendOtpClicked('${email}')">Resend OTP</button>
+            <div id="resend-otp-timer" style="color:var(--muted);font-size:13px;margin-top:8px"></div>
+          </div>
+    </div>
+    <div class="auth-footer"><span>© 2025 Riphah International University · InternBridge</span></div>`;
+}
+
+async function submitOtp(email) {
+  const code = document.getElementById('otp-code').value.trim();
+  const btn = document.getElementById('otp-submit-btn');
+  if (!code || code.length !== 6) return showToast('Please enter the 6-digit code.','error');
+  btn.disabled = true; btn.textContent = 'Verifying…';
+  try {
+    const res = await api.verifyOtp(email, code);
+    showToast(res.message || 'Email verified! Please wait for university approval.', 'success');
+    // After verification, show login screen so user can return and wait for approval
+    showLoginScreen('student');
+  } catch (e) {
+    showToast(e.message || 'Failed to verify code.', 'error');
+    btn.disabled = false; btn.textContent = 'Verify Email';
+  }
+}
+
+// Resend OTP handling
+let _resendInterval = null;
+function startResendCountdown(seconds = 60) {
+  const btn = document.getElementById('resend-otp-btn');
+  const timer = document.getElementById('resend-otp-timer');
+  if (!btn || !timer) return;
+  btn.disabled = true;
+  let remaining = seconds;
+  timer.textContent = `Resend in ${remaining}s`;
+  _resendInterval && clearInterval(_resendInterval);
+  _resendInterval = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(_resendInterval); _resendInterval = null; btn.disabled = false; timer.textContent = '';
+      btn.textContent = 'Resend OTP';
+    } else {
+      timer.textContent = `Resend in ${remaining}s`;
+      btn.textContent = 'Resend OTP';
+    }
+  }, 1000);
+}
+
+async function resendOtpClicked(email) {
+  const btn = document.getElementById('resend-otp-btn');
+  if (!btn) return;
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const res = await api.resendOtp(email);
+    showToast(res.message || 'New OTP sent to your email.', 'success');
+    startResendCountdown(60);
+  } catch (e) {
+    console.error('Resend OTP failed:', e);
+    showToast(e.message || 'Failed to resend OTP.', 'error');
+    // allow retry after short delay
+    btn.disabled = false; btn.textContent = 'Resend OTP';
+  }
 }
 
 // ── REGISTER COMPANY ──────────────────────────────────────────
@@ -310,11 +363,17 @@ async function registerCompany() {
   const name=document.getElementById('r-name').value.trim();
   const email=document.getElementById('r-email').value.trim();
   const password=document.getElementById('r-pass').value;
+  console.log('DEBUG company form submit called', {name, email, password});
   const pass2=document.getElementById('r-pass2').value;
   const city=document.getElementById('r-city').value;
   const cmmi=document.getElementById('r-cmmi').value.trim();
-  if (!name||!email||!password||!city||!cmmi)
-    return showToast('Company name, city, CMMI/ISO, email and password are required.','error');
+  const registrationType = document.getElementById('r-registration-type') && document.getElementById('r-registration-type').value;
+  const registrationId = document.getElementById('r-registration-id') && document.getElementById('r-registration-id').value.trim();
+  const yearOfRegistration = document.getElementById('r-year') && document.getElementById('r-year').value;
+  // Use yearOfRegistration as the `operational` value for backend compatibility
+  const operationalValue = yearOfRegistration || '';
+  if (!name||!email||!password||!city||!cmmi||!registrationType||!registrationId||!yearOfRegistration)
+    return showToast('Company name, city, registration, year, CMMI/ISO, email and password are required.','error');
   if (password!==pass2)  return showToast('Passwords do not match.','error');
   if (password.length<6) return showToast('Password must be at least 6 characters.','error');
   const btn=document.getElementById('reg-submit-btn');
@@ -323,17 +382,29 @@ async function registerCompany() {
   try {
     regCertDoc=await readFileAsBase64(document.getElementById('r-regcert'));
     cmmiDoc=await readFileAsBase64(document.getElementById('r-cmmidoc'));
+    console.log('DEBUG company files:', { regCertDocSize: regCertDoc ? regCertDoc.length : 0, cmmiDocSize: cmmiDoc ? cmmiDoc.length : 0 });
   } catch(e) { btn.disabled=false; btn.textContent='Submit Application →'; return showToast('File error: '+e.message,'error'); }
   try {
+    // Map registrationId into the legacy per-provider fields expected by the backend
+    let pasha = '';
+    let pseb = '';
+    let secp = '';
+    const rt = (registrationType || '').toString().toUpperCase();
+    const rid = registrationId || '';
+    if (rt === 'P@SHA' || rt === 'PASHA') pasha = rid;
+    else if (rt === 'PSEB') pseb = rid;
+    else if (rt === 'SECP') secp = rid;
+
     await api.registerCompany({
-      name,email,password,city,cmmi,
-      pasha:document.getElementById('r-pasha').value.trim(),
-      pseb:document.getElementById('r-pseb').value.trim(),
-      secp:document.getElementById('r-secp').value.trim(),
-      operational:document.getElementById('r-ops').value.trim(),
-      regCertDoc,cmmiDoc,
+      name, email, password, city, cmmi,
+      registrationType, registrationId, yearOfRegistration,
+      // legacy fields populated based on selected registration type
+      pasha, pseb, secp, operational: operationalValue,
+      // include base64 file payloads (backend may accept or ignore depending on server-side handling)
+      regCertDoc, cmmiDoc,
     });
-    showCompanyPendingScreen(name);
+    // Show OTP verification modal so company can verify email before admin review
+    showOTPVerificationScreen(email);
   } catch(e) { showToast(e.message,'error'); btn.disabled=false; btn.textContent='Submit Application →'; }
 }
 
@@ -351,7 +422,7 @@ function showCompanyPendingScreen(companyName) {
       <h2 style="margin-bottom:8px">Application Submitted!</h2>
       <p style="color:var(--muted);font-size:13px;margin-bottom:28px">
         Your company registration for <strong>${companyName}</strong> has been received.
-        The university admin will review your documents and certificates.
+        The university will review your documents and certificates.
       </p>
       <div style="display:flex;align-items:center;justify-content:center;margin-bottom:28px">
         <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:110px">
@@ -395,7 +466,7 @@ function showStudentPendingScreen() {
       <div style="font-size:60px;margin-bottom:16px">🎓</div>
       <h2 style="margin-bottom:8px">Account Created!</h2>
       <p style="color:var(--muted);font-size:13px;margin-bottom:24px">
-        Your student registration has been submitted. The university admin will verify
+        Your student registration has been submitted. The university will verify
         your transcript and academic details before activating your account.
       </p>
       <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:16px;margin-bottom:20px;text-align:left">
@@ -408,7 +479,7 @@ function showStudentPendingScreen() {
       </div>
       <div class="alert alert-warning" style="text-align:left;margin-bottom:20px">
         <span class="alert-icon">⏳</span>
-        <div>You <strong>cannot log in</strong> until the university admin approves your account.</div>
+        <div>You <strong>cannot log in</strong> until the university approves your account.</div>
       </div>
       <button class="btn btn-primary btn-full" onclick="showLoginScreen('student')">Go to Student Login →</button>
     </div>

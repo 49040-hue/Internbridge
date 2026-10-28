@@ -1,19 +1,21 @@
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'internbridge_v4_secret_key_2026';
-
-// Warn if JWT_SECRET is not provided or left as the default hardcoded value
-if (!process.env.JWT_SECRET || JWT_SECRET === 'internbridge_v4_secret_key_2026') {
-  console.warn('WARNING: JWT_SECRET is not set in environment variables. Please set it in .env file.');
-}
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET is not set in environment variables');
 
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth) {
-    console.warn('authMiddleware: missing Authorization header');
+    // Do not spam logs for unauthenticated public requests; simply return 401
     return res.status(401).json({ error: 'Authentication required. Please log in.' });
   }
   // Accept either 'Bearer <token>' or a raw token value for robustness
-  const token = typeof auth === 'string' && auth.startsWith('Bearer ') ? auth.split(' ')[1] : auth;
+  // Strip any leading 'Bearer ' prefixes (handles accidental double-prefixes)
+  let token = auth;
+  if (typeof token === 'string') token = token.replace(/^(?:Bearer\s+)+/i, '').trim();
+  // Treat explicit 'null'/'undefined' or empty strings as missing token
+  if (!token || token === 'null' || token === 'undefined' || (typeof token === 'string' && token.trim() === '')) {
+    return res.status(401).json({ error: 'Authentication required. Please log in.' });
+  }
   try {
     req.user = jwt.verify(token, JWT_SECRET);
     next();

@@ -3,6 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const { sendMail } = require('../utils/email');
+const { createNotification } = require('./notifications');
 
 // ── UNIVERSITY ADMIN ──────────────────────────────────────────────────
 
@@ -57,7 +59,6 @@ router.get('/students/pending', authMiddleware, requireRole('university', 'sysad
       const issues = [];
       if ((s.creditHours||0) < 60) issues.push(`Credit hours below 60 (${s.creditHours||0}/60)`);
       if ((s.cgpa||0) < 2.0) issues.push(`CGPA below 2.0 (current: ${s.cgpa||0})`);
-      if (!s.electiveCourse) issues.push('No elective course listed');
       if (!s.enrolled) issues.push('Not marked as enrolled');
       return { ...safe, eligibilityIssues: issues };
     });
@@ -78,11 +79,41 @@ router.patch('/students/:id', authMiddleware, requireRole('university', 'sysadmi
     const student = rows[0];
     if (!student) return res.status(404).json({ error: 'Student not found.' });
     if (decision === 'approve') {
-      await db.execute('UPDATE users SET accountStatus = ?, verifiedAt = ?, rejectionReason = NULL WHERE id = ?', ['verified', new Date().toISOString(), student.id]);
-      console.log(`Student account verified: ${student.name}`);
+        await db.execute('UPDATE users SET accountStatus = ?, verifiedAt = ?, rejectionReason = NULL WHERE id = ?', ['verified', new Date().toISOString(), student.id]);
+        console.log(`Student account verified: ${student.name}`);
+        // Send approval email (do not block response)
+        try {
+          const from = `InternBridge <${process.env.EMAIL_USER}>`;
+          const subject = 'InternBridge — Account Approved';
+          const html = `
+            <p>Hi ${student.name || ''},</p>
+            <p>Congratulations! Your InternBridge account has been approved by the university admin. You can now log in and start applying for internships.</p>
+            <p>— InternBridge</p>`;
+          await sendMail({ from, to: student.email, subject, html });
+        } catch (e) {
+          console.error('Failed to send student approval email:', e);
+        }
+        // Create in-app notification (non-blocking)
+        try { await createNotification(student.id, 'Account Approved', 'Your account has been approved!', 'success'); } catch (e) { console.error('createNotification error:', e); }
     } else {
       await db.execute('UPDATE users SET accountStatus = ?, rejectionReason = ? WHERE id = ?', ['rejected', reason || 'Does not meet eligibility criteria.', student.id]);
       console.warn(`Student verification rejected: ${student.name}`);
+      // Send rejection email (do not block response)
+        try {
+        const from = `InternBridge <${process.env.EMAIL_USER}>`;
+        const subject = 'InternBridge — Account Not Approved';
+        const html = `
+          <p>Hi ${student.name || ''},</p>
+          <p>Unfortunately your InternBridge registration was not approved.</p>
+          <p>Reason: ${reason || 'Does not meet eligibility criteria.'}</p>
+          <p>Please contact your university admin for more information.</p>
+          <p>— InternBridge</p>`;
+        await sendMail({ from, to: student.email, subject, html });
+      } catch (e) {
+        console.error('Failed to send student rejection email:', e);
+      }
+      // Create in-app notification (non-blocking)
+      try { await createNotification(student.id, 'Account Rejected', reason || 'Does not meet eligibility criteria.', 'error'); } catch (e) { console.error('createNotification error:', e); }
     }
     res.json({ message: `Student ${decision}d.` });
   } catch (err) {
@@ -104,6 +135,17 @@ router.get('/students', authMiddleware, requireRole('university', 'sysadmin'), a
     res.json(students);
   } catch (err) {
     console.error('Get students error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// GET /api/admin/students-list — lightweight list of verified students for university dropdowns
+router.get('/students-list', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
+  try {
+    const [rows] = await db.execute("SELECT id, name, email, university, accountStatus, role FROM users WHERE role = 'student' AND accountStatus = 'verified'");
+    res.json(rows);
+  } catch (err) {
+    console.error('Get students-list error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });
@@ -137,7 +179,20 @@ router.get('/companies', authMiddleware, requireRole('university', 'sysadmin'), 
     for (const c of companiesRows) {
       const { password, ...safe } = c;
       const [countRows] = await db.execute('SELECT COUNT(*) as c FROM internships WHERE companyId = ?', [c.id]);
-      companies.push({ ...safe, internshipsCount: countRows[0].c });
+      // Attach registration/cmmi document URLs if uploadedFiles entries exist
+      try {
+        const [files] = await db.execute('SELECT * FROM uploadedFiles WHERE ownerId = ?', [c.id]);
+        let regCertDoc = null;
+        let cmmiDoc = null;
+        for (const f of files) {
+          if (f.fileName && f.fileName.startsWith('reg-cert_')) regCertDoc = `/api/profile/file/${f.id}`;
+          if (f.fileName && f.fileName.startsWith('cmmi_cert_')) cmmiDoc = `/api/profile/file/${f.id}`;
+        }
+        companies.push({ ...safe, internshipsCount: countRows[0].c, regCertDoc, cmmiDoc });
+      } catch (e) {
+        console.error('Failed to fetch uploaded files for company', c.id, e);
+        companies.push({ ...safe, internshipsCount: countRows[0].c });
+      }
     }
     res.json(companies);
   } catch (err) {
@@ -157,6 +212,34 @@ router.patch('/companies/:id', authMiddleware, requireRole('university', 'sysadm
     if (!company) return res.status(404).json({ error: 'Company not found.' });
     await db.execute('UPDATE users SET status = ?, rejectionReason = ? WHERE id = ?', [status, reason || null, company.id]);
     console.log(`Company ${company.name} ${status} by ${req.user.role}`);
+
+    // Send email notification to company
+    try {
+      const from = `InternBridge <${process.env.EMAIL_USER}>`;
+      if (status === 'verified') {
+        const subject = 'InternBridge — Company registration approved';
+        const html = `
+          <p>Dear ${company.name || 'Company'},</p>
+          <p>Congratulations! Your company <strong>${company.name}</strong> has been approved by the university administrator.</p>
+          <p>You can now log in using the email <strong>${company.email}</strong> to post internship listings and manage applications on InternBridge.</p>
+          <p>If you have any questions, please reply to this email or contact the university administration.</p>
+          <p>Best regards,<br/>InternBridge Team</p>`;
+        await sendMail({ from, to: company.email, subject, html });
+      } else if (status === 'rejected') {
+        const subject = 'InternBridge — Company registration rejected';
+        const html = `
+          <p>Dear ${company.name || 'Company'},</p>
+          <p>We regret to inform you that your company registration on InternBridge has been <strong>rejected</strong>.</p>
+          <p>Reason: ${reason || 'Does not meet the university criteria.'}</p>
+          <p>You may re-register after addressing the issues mentioned above.</p>
+          <p>If you believe this decision is in error, please contact the university administration with supporting documentation.</p>
+          <p>Best regards,<br/>InternBridge Team</p>`;
+        await sendMail({ from, to: company.email, subject, html });
+      }
+    } catch (e) {
+      console.error('Failed to send company notification email:', e);
+    }
+
     res.json({ message: `Company ${status}.` });
   } catch (err) {
     console.error('Patch company error:', err);
@@ -171,6 +254,17 @@ router.get('/complaints', authMiddleware, requireRole('university', 'sysadmin'),
     res.json(rows);
   } catch (err) {
     console.error('Get complaints error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// GET /api/admin/complaints/mine — student-facing complaints (only their own)
+router.get('/complaints/mine', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await db.execute('SELECT * FROM complaints WHERE studentId = ? ORDER BY submittedAt DESC', [req.user.id]);
+    res.json(rows);
+  } catch (err) {
+    console.error('Get my complaints error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });
@@ -195,22 +289,33 @@ router.patch('/complaints/:id', authMiddleware, requireRole('university', 'sysad
 });
 
 // POST /api/admin/complaints — company files complaint
+// Require either applicationId OR studentId+studentName to create an actionable complaint
 router.post('/complaints', authMiddleware, requireRole('company'), async (req, res) => {
-  const { applicationId, subject, description } = req.body;
+  const { applicationId, studentId, studentName, subject, description } = req.body;
   if (!subject || !description) return res.status(400).json({ error: 'Subject and description are required.' });
   try {
-    let studentId = null, studentName = 'Unknown', internshipTitle = '';
+    let targetStudentId = null, targetStudentName = 'Unknown', internshipTitle = '';
     if (applicationId) {
       const [appRows] = await db.execute('SELECT * FROM applications WHERE id = ? LIMIT 1', [applicationId]);
       const app = appRows[0];
       if (app) {
-        studentId = app.studentId; studentName = app.studentName; internshipTitle = app.internshipTitle;
+        targetStudentId = app.studentId; targetStudentName = app.studentName; internshipTitle = app.internshipTitle;
+      } else {
+        return res.status(404).json({ error: 'Application not found.' });
       }
+    } else if (studentId) {
+      // If company provides a studentId, verify existence
+      const [sRows] = await db.execute('SELECT id, name FROM users WHERE id = ? AND role = ? LIMIT 1', [parseInt(studentId), 'student']);
+      if (!sRows.length) return res.status(404).json({ error: 'Student not found.' });
+      targetStudentId = sRows[0].id; targetStudentName = studentName || sRows[0].name;
+    } else {
+      return res.status(400).json({ error: 'Provide applicationId or studentId to identify the complaint target.' });
     }
+
     const submittedAt = new Date().toISOString();
     const insertSQL = `INSERT INTO complaints (fromId,fromName,studentId,studentName,internshipTitle,applicationId,subject,description,submittedAt,status,adminResponse,respondedAt)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`;
-    const params = [req.user.id, req.user.name, studentId, studentName, internshipTitle, applicationId || null, subject, description, submittedAt, 'open', null, null];
+    const params = [req.user.id, req.user.name, targetStudentId, targetStudentName, internshipTitle, applicationId || null, subject, description, submittedAt, 'open', null, null];
     const [result] = await db.execute(insertSQL, params);
     const [newRows] = await db.execute('SELECT * FROM complaints WHERE id = ? LIMIT 1', [result.insertId]);
     console.log(`Complaint filed by ${req.user.name}: ${subject}`);
@@ -244,9 +349,49 @@ router.post('/feedback', authMiddleware, requireRole('university', 'sysadmin'), 
     const [result] = await db.execute(insertSQL, params);
     const [newRows] = await db.execute('SELECT * FROM universityFeedback WHERE id = ? LIMIT 1', [result.insertId]);
     console.log(`Feedback sent to ${studentName} by ${req.user.name}`);
+    // Send email to the student (non-blocking)
+    try {
+      const [sRows] = await db.execute('SELECT email, name FROM users WHERE id = ? LIMIT 1', [studentId]);
+      const s = sRows[0];
+      if (s && s.email) {
+        const from = `InternBridge <${process.env.EMAIL_USER}>`;
+        const subjectMail = 'New Feedback from University — InternBridge';
+        const html = `
+          <p>Dear ${s.name || studentName || 'Student'},</p>
+          <p>Your university coordinator has sent you a <strong>${category||'General'}</strong> message regarding: <strong>${subject}</strong>.</p>
+          <p><strong>Message:</strong><br/>${message}</p>
+          <p>Please log in to InternBridge to view and respond.</p>
+          <p>— InternBridge</p>`;
+        try { await sendMail({ from, to: s.email, subject: subjectMail, html }); } catch (e) { console.error('Failed to send feedback email to student:', e); }
+      }
+    } catch (e) {
+      console.error('Error fetching student email for feedback notification:', e);
+    }
     res.status(201).json(newRows[0]);
   } catch (err) {
     console.error('Create feedback error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// PATCH /api/admin/feedback/:id/read — mark feedback as read by student
+router.patch('/feedback/:id/read', authMiddleware, async (req, res) => {
+  try {
+    await db.execute('UPDATE universityFeedback SET `read` = 1 WHERE id = ? AND studentId = ?', [parseInt(req.params.id), req.user.id]);
+    res.json({ message: 'Marked as read.' });
+  } catch (e) {
+    console.error('Mark feedback read error:', e);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// DELETE /api/admin/feedback/:id — delete feedback (university/sysadmin only)
+router.delete('/feedback/:id', authMiddleware, requireRole('university','sysadmin'), async (req, res) => {
+  try {
+    await db.execute('DELETE FROM universityFeedback WHERE id = ?', [parseInt(req.params.id)]);
+    res.json({ message: 'Feedback deleted.' });
+  } catch (e) {
+    console.error('Delete feedback error:', e);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });

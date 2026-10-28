@@ -2,7 +2,7 @@
 
 async function initSysProfile() {
   try {
-    const profile = await api.getProfile(authToken);
+    const profile = await api.getProfile(authToken); 
     document.getElementById('page-sys-profile').innerHTML = `
       <div class="page-header"><div><div class="page-title">My Profile</div></div></div>
       <div class="card" style="max-width:500px;margin:auto">
@@ -111,7 +111,7 @@ function openCreateAdminModal() {
     <div class="form-group"><label>Password *</label><input id="ca-pass" type="password" placeholder="Minimum 6 characters" /></div>
     <div class="form-group"><label>Role *</label>
       <select id="ca-role">
-        <option value="university">University Admin</option>
+        <option value="university">University</option>
         <option value="sysadmin">System Admin</option>
       </select>
     </div>

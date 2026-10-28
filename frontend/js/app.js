@@ -90,43 +90,48 @@ const sidebarConfig = {
 
 // lazy initializer map so that handlers defined in other modules are available
 function getPageInit(pageId) {
+  // store initializer names (resolve to actual functions at call-time)
   const map = {
-    'dashboard':            initStudentDashboard,
-    'search':               initSearchPage,
-    'my-applications':      initMyApplications,
-    'decisions':            initDecisionsPage,
-    'my-feedback':          initMyFeedback,
-    'self-found':           initSelfFoundPage,
-    'criteria-view':        initCriteriaView,
-    'profile':              initStudentProfile,
-    'my-complaints':        initMyComplaints,
-    'company-dashboard':    initCompanyDashboard,
-    'my-internships':       initMyInternships,
-    'post-internship':      initPostInternship,
-    'applicants':           initApplicants,
-    'file-complaint':       initFileComplaint,
-    'company-profile':      initCompanyProfile,
-    'uni-dashboard':        initUniDashboard,
-    'verify-students':      initVerifyStudents,
-    'verify-companies':     initVerifyCompanies,
-    'approve-internships':  initApproveInternships,
-    'self-found-review':    initSelfFoundReview,
-    'all-applications':     initAllApplications,
-    'student-details':      initStudentDetails,
-    'complaints':           initComplaints,
-    'send-feedback':        initSendFeedback,
-    'criteria':             initCriteria,
-    'monitor-posts':        initMonitorPosts,
-    'reports':              initReports,
-    'sys-dashboard':        initSysDashboard,
-    'manage-users':         initManageUsers,
-    'security':             initSecurity,
-    'backup':               initBackup,
-    'activity':             initActivityLog,
-    'uni-profile':          initUniProfile,
-    'sys-profile':          initSysProfile,
+    'dashboard':            'initStudentDashboard',
+    'search':               'initSearchPage',
+    'my-applications':      'initMyApplications',
+    'decisions':            'initDecisionsPage',
+    'my-feedback':          'initMyFeedback',
+    'self-found':           'initSelfFoundPage',
+    'criteria-view':        'initCriteriaView',
+    'profile':              'initStudentProfile',
+    'my-complaints':        'initMyComplaints',
+    'company-dashboard':    'initCompanyDashboard',
+    'my-internships':       'initMyInternships',
+    'post-internship':      'initPostInternship',
+    'applicants':           'initApplicants',
+    'file-complaint':       'initFileComplaint',
+    'company-profile':      'initCompanyProfile',
+    'uni-dashboard':        'initUniDashboard',
+    'verify-students':      'initVerifyStudents',
+    'verify-companies':     'initVerifyCompanies',
+    'approve-internships':  'initApproveInternships',
+    'self-found-review':    'initSelfFoundReview',
+    'all-applications':     'initAllApplications',
+    'student-details':      'initStudentDetails',
+    'complaints':           'initComplaints',
+    'send-feedback':        'initSendFeedback',
+    'criteria':             'initCriteria',
+    'monitor-posts':        'initMonitorPosts',
+    'reports':              'initReports',
+    'sys-dashboard':        'initSysDashboard',
+    'manage-users':         'initManageUsers',
+    'security':             'initSecurity',
+    'backup':               'initBackup',
+    'activity':             'initActivityLog',
+    'uni-profile':          'initUniProfile',
+    'sys-profile':          'initSysProfile',
   };
-  return map[pageId];
+  const fnName = map[pageId];
+  if (!fnName) return null;
+  // prefer globalThis for widest compatibility
+  const fn = (typeof globalThis !== 'undefined' && typeof globalThis[fnName] === 'function') ? globalThis[fnName] : (typeof window !== 'undefined' && typeof window[fnName] === 'function' ? window[fnName] : null);
+  return fn;
 }  
 
 let currentPage = null;
@@ -208,7 +213,7 @@ function initApp() {
   const role = currentUser.role;
   document.getElementById('nav-username').textContent = currentUser.name;
   document.getElementById('nav-role').textContent = {
-    student:'Student', company:'Company', university:'University Admin', sysadmin:'System Admin',
+    student:'Student', company:'Company', university:'University', sysadmin:'System Admin',
   }[role] || role;
 
   const sidebar = document.getElementById('sidebar');
@@ -228,6 +233,57 @@ function initApp() {
   navigateTo(defaults[role] || 'dashboard');
   setTimeout(updateSidebarBadges, 600);
   setInterval(updateSidebarBadges, 30000);
+  // Notifications: initial load and polling
+  try {
+    api.loadNotifications().then(() => {});
+    setInterval(() => { api.loadNotifications().catch(()=>{}); }, 30000);
+  } catch (e) {}
+
+  // Bell click handler and dropdown renderer
+  const notifBtn = document.getElementById('notif-btn');
+  const notifDropdown = document.getElementById('notif-dropdown');
+  if (notifBtn && notifDropdown) {
+    notifBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (notifDropdown.style.display === 'none' || !notifDropdown.style.display) {
+        // open and load notifications
+        notifDropdown.style.display = 'block';
+        notifDropdown.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted)">Loading…</div>';
+        try {
+          const rows = await api.loadNotifications();
+          renderNotifications(rows || []);
+          // mark all read button
+          const markAllBtn = document.createElement('div');
+          markAllBtn.style.padding = '8px'; markAllBtn.style.textAlign = 'center';
+          markAllBtn.innerHTML = '<button class="btn btn-outline" onclick="(async function(){ await api.markAllRead(); document.getElementById(\'notif-dropdown\').style.display=\'none\'; })()">Mark all read</button>';
+          notifDropdown.appendChild(markAllBtn);
+        } catch (err) { notifDropdown.innerHTML = '<div style="padding:12px;color:var(--muted)">Failed to load notifications.</div>'; }
+      } else {
+        notifDropdown.style.display = 'none';
+      }
+    });
+    // close dropdown when clicking outside
+    document.addEventListener('click', (e) => { if (notifDropdown && !notifDropdown.contains(e.target) && e.target !== notifBtn) notifDropdown.style.display = 'none'; });
+  }
+
+  function renderNotifications(rows) {
+    const list = (rows || []).map(r => `
+      <div class="notif-item" data-id="${r.id}" style="padding:10px 12px;border-bottom:1px solid var(--border);background:${r.isRead ? 'transparent' : 'rgba(37,99,235,0.04)'};cursor:pointer">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700">${r.title}</div>
+          <div style="font-size:12px;color:var(--muted)">${new Date(r.created_at).toLocaleString()}</div>
+        </div>
+        <div style="font-size:13px;color:var(--muted);margin-top:6px">${r.message || ''}</div>
+      </div>`).join('');
+    notifDropdown.innerHTML = `<div style="max-height:360px;overflow:auto">${list || '<div style="padding:12px;color:var(--muted)">No notifications.</div>'}</div>`;
+    // attach click handlers to mark read and optionally navigate
+    notifDropdown.querySelectorAll('.notif-item').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-id');
+        try { await api.markNotificationRead(id); el.style.background = 'transparent'; api.loadNotifications(); } catch(e){}
+      });
+    });
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

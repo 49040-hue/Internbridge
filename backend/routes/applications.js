@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const { sendMail } = require('../utils/email');
 
 function fullStudentDetails(student) {
   const { password, ...safe } = student;
@@ -42,7 +43,7 @@ router.post('/', authMiddleware, requireRole('student'), async (req, res) => {
     const appliedAt = new Date().toISOString().split('T')[0];
     const insertSQL = `INSERT INTO applications (studentId,internshipId,studentName,internshipTitle,company,companyId,appliedAt,status,companyFeedback,sysadminApproved,slotId)
       VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
-    const params = [req.user.id, parseInt(internshipId), req.user.name, internship.title, internship.company, internship.companyId, appliedAt, 'pending', null, 0, null];
+    const params = [req.user.id, parseInt(internshipId), student.name, internship.title, internship.company, internship.companyId, appliedAt, 'pending', null, 0, null];
     const [result] = await db.execute(insertSQL, params);
     const appId = result.insertId;
     console.log(`${req.user.name} applied for "${internship.title}"`);
@@ -163,10 +164,86 @@ router.patch('/:id', authMiddleware, requireRole('company'), async (req, res) =>
     const [appRows] = await db.execute('SELECT * FROM applications WHERE id = ? LIMIT 1', [parseInt(req.params.id)]);
     const app = appRows[0];
     if (!app) return res.status(404).json({ error: 'Application not found.' });
+    // Only allow company to change applications that are pending or previously rejected by company
+    const allowedCurrent = ['pending', 'company_rejected'];
+    if (!allowedCurrent.includes(app.status)) {
+      return res.status(400).json({ error: 'Application cannot be modified in its current state.' });
+    }
     const [internRows] = await db.execute('SELECT id FROM internships WHERE companyId = ? AND id = ? LIMIT 1', [req.user.id, app.internshipId]);
     if (!internRows.length) return res.status(403).json({ error: 'This application is not for your internship.' });
     await db.execute('UPDATE applications SET status = ?, companyFeedback = ? WHERE id = ?', [status, feedback || null, app.id]);
     console.log(`Application for "${app.internshipTitle}" ${status} by ${req.user.name}`);
+
+    // Notify student by email and in-app if company accepted
+    if (status === 'company_accepted') {
+      try {
+        const [studentRows] = await db.execute('SELECT id, name, email FROM users WHERE id = ? LIMIT 1', [app.studentId]);
+        const student = studentRows[0];
+        if (student && student.email) {
+          const mailOptions = {
+            from: `InternBridge <${process.env.EMAIL_USER}>`,
+            to: student.email,
+            subject: 'InternBridge — Your application was accepted by the company',
+            html: `
+              <p>Hi ${student.name || ''},</p>
+              <p>Good news — the company <strong>${req.user.name}</strong> has accepted your application for the internship <strong>${app.internshipTitle}</strong>.</p>
+              <p>Please review the offer and confirm or decline it in your InternBridge dashboard.</p>
+              <p>— InternBridge</p>`
+          };
+          try {
+            const sent = await sendMail(mailOptions);
+            if (!sent.ok) console.error('Failed to send company_accepted email to student:', sent.error);
+          } catch (e) {
+            console.error('Error sending company_accepted email to student:', e);
+          }
+        }
+      } catch (e) {
+        console.error('Error sending student notification for company_accepted:', e);
+      }
+
+      // Create in-app notification for student
+      try {
+        const { createNotification } = require('./notifications');
+        await createNotification(app.studentId, 'Application Accepted', `${req.user.name} accepted your application for ${app.internshipTitle}!`, 'success');
+      } catch (e) {
+        console.error('createNotification error (company_accepted):', e);
+      }
+    }
+
+    // Notify student in-app when company rejects (info)
+    if (status === 'company_rejected') {
+      try {
+        const { createNotification } = require('./notifications');
+        await createNotification(app.studentId, 'Application Update', feedback || `${req.user.name} updated your application.`, 'info');
+      } catch (e) {
+        console.error('createNotification error (company_rejected):', e);
+      }
+      // Also email student about rejection
+      try {
+        const [studentRows2] = await db.execute('SELECT id, name, email FROM users WHERE id = ? LIMIT 1', [app.studentId]);
+        const student2 = studentRows2[0];
+        if (student2 && student2.email) {
+          const mailOptions2 = {
+            from: `InternBridge <${process.env.EMAIL_USER}>`,
+            to: student2.email,
+            subject: 'Application Update — InternBridge',
+            html: `
+              <p>Dear ${student2.name || ''},</p>
+              <p>We regret to inform you that your application for <strong>${app.internshipTitle}</strong> at <strong>${app.company}</strong> was not selected at this time. Keep applying — new opportunities are added regularly on InternBridge.</p>
+              <p>— InternBridge</p>`
+          };
+          try {
+            const sent2 = await sendMail(mailOptions2);
+            if (!sent2.ok) console.error('Failed to send company_rejected email to student:', sent2.error);
+          } catch (e) {
+            console.error('Error sending company_rejected email to student:', e);
+          }
+        }
+      } catch (e) {
+        console.error('Error looking up student for company_rejected email:', e);
+      }
+    }
+
     const [updated] = await db.execute('SELECT * FROM applications WHERE id = ? LIMIT 1', [app.id]);
     res.json(updated[0]);
   } catch (err) {
@@ -188,6 +265,29 @@ router.patch('/:id/student-decision', authMiddleware, requireRole('student'), as
       await db.execute("UPDATE applications SET status = 'student_confirmed' WHERE id = ?", [app.id]);
       await db.execute("UPDATE applications SET status = 'student_declined' WHERE studentId = ? AND id != ? AND status = 'company_accepted'", [req.user.id, app.id]);
       console.log(`${req.user.name} confirmed internship at ${app.company}`);
+      // Notify sysadmin about student's confirmation
+      try {
+        const [sysRows] = await db.execute("SELECT name,email FROM users WHERE role = 'sysadmin'");
+        const sysadmins = sysRows || [];
+        if (sysadmins.length) {
+          const [companyRows] = await db.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [app.companyId]);
+          const company = companyRows[0];
+          const subject = 'InternBridge — Student confirmed an internship offer';
+          const html = `
+            <p>Dear Admin,</p>
+            <p>Student <strong>${req.user.name}</strong> has confirmed an internship offer at <strong>${company ? company.name : app.company}</strong> for <strong>${app.internshipTitle}</strong>.</p>
+            <p>Please review and perform any necessary system administration steps.</p>
+            <p>— InternBridge</p>`;
+          for (const sa of sysadmins) {
+            if (!sa.email) continue;
+            const mailOptions = { from: `InternBridge <${process.env.EMAIL_USER}>`, to: sa.email, subject, html };
+            const sent = await sendMail(mailOptions);
+            if (!sent.ok) console.error('Failed to send student_confirmed email to sysadmin:', sent.error);
+          }
+        } else {
+          console.warn('No sysadmin accounts found to notify about student confirmation.');
+        }
+      } catch (e) { console.error('Error notifying sysadmin of student confirmation:', e); }
     } else {
       await db.execute("UPDATE applications SET status = 'student_declined' WHERE id = ?", [app.id]);
       console.log(`${req.user.name} declined offer from ${app.company}`);
@@ -207,8 +307,43 @@ router.patch('/:id/sysadmin-approve', authMiddleware, requireRole('sysadmin', 'u
     const app = appRows[0];
     if (!app) return res.status(404).json({ error: 'Application not found.' });
     if (app.status !== 'student_confirmed') return res.status(400).json({ error: 'Application must be student-confirmed before system admin approval.' });
+    // If university role is performing approval, ensure the student belongs to the same university
+    if (req.user.role === 'university') {
+      try {
+        const [sRows] = await db.execute('SELECT university FROM users WHERE id = ? LIMIT 1', [app.studentId]);
+        const student = sRows[0];
+        if (!student) return res.status(404).json({ error: 'Student not found for this application.' });
+        if ((req.user.university || '').trim() && (student.university || '').trim() && req.user.university !== student.university) {
+          return res.status(403).json({ error: 'You are not authorized to approve applications for students of other universities.' });
+        }
+      } catch (e) {
+        console.error('University ownership check error:', e);
+        return res.status(500).json({ error: 'Internal server error.' });
+      }
+    }
     await db.execute("UPDATE applications SET status = 'sysadmin_approved', sysadminApproved = 1 WHERE id = ?", [app.id]);
     console.log(`System Admin gave final approval: ${app.studentName} at ${app.company}`);
+    // Send email to student notifying final approval
+    try {
+      const [studentRows3] = await db.execute('SELECT id, name, email FROM users WHERE id = ? LIMIT 1', [app.studentId]);
+      const student3 = studentRows3[0];
+      if (student3 && student3.email) {
+        const mailOptions3 = {
+          from: `InternBridge <${process.env.EMAIL_USER}>`,
+          to: student3.email,
+          subject: 'Internship Officially Confirmed — InternBridge',
+          html: `
+            <p>Congratulations ${student3.name || app.studentName},</p>
+            <p>Your internship at <strong>${app.company}</strong> for the position of <strong>${app.internshipTitle}</strong> has been officially confirmed by the university. Please check your dashboard for next steps.</p>
+            <p>— InternBridge</p>`
+        };
+        try {
+          const sent3 = await sendMail(mailOptions3);
+          if (!sent3.ok) console.error('Failed to send sysadmin_approved email to student:', sent3.error);
+        } catch (e) { console.error('Error sending sysadmin_approved email to student:', e); }
+      }
+    } catch (e) { console.error('Error looking up student for sysadmin_approved email:', e); }
+
     const [updated] = await db.execute('SELECT * FROM applications WHERE id = ? LIMIT 1', [app.id]);
     res.json(updated[0]);
   } catch (err) {

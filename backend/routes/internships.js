@@ -23,8 +23,9 @@ async function checkInternship(internship) {
 }
 
 // GET /api/internships — public listing (only sysadmin-approved, from verified companies)
+// Supports optional filters: city, search (title/company), type, stipendMin, stipendMax, durationMin, durationMax
 router.get('/', async (req, res) => {
-  const { city, search } = req.query;
+  const { city, search, type, stipendMin, stipendMax, durationMin, durationMax } = req.query;
   try {
     const verified = await db.execute("SELECT id FROM users WHERE role = 'company' AND status = 'verified'");
     const verifiedIds = (verified[0] || []).map(r => r.id);
@@ -42,6 +43,29 @@ router.get('/', async (req, res) => {
     if (search) {
       sql += ' AND (LOWER(title) LIKE ? OR LOWER(company) LIKE ?)';
       params.push(`%${search.toLowerCase()}%`, `%${search.toLowerCase()}%`);
+    }
+    // Filter by type (exact match, e.g. 'full-time' or 'part-time')
+    if (type) {
+      sql += ' AND LOWER(type) = ?';
+      params.push(type.toLowerCase());
+    }
+    // Stipend numeric range filtering. Many records use 'Not specified' — ensure stipend looks numeric before casting.
+    if (stipendMin) {
+      sql += " AND stipend REGEXP '^[0-9]' AND CAST(stipend AS SIGNED) >= ?";
+      params.push(parseInt(stipendMin, 10) || 0);
+    }
+    if (stipendMax) {
+      sql += " AND stipend REGEXP '^[0-9]' AND CAST(stipend AS SIGNED) <= ?";
+      params.push(parseInt(stipendMax, 10) || 0);
+    }
+    // Duration (weeks) filtering
+    if (durationMin) {
+      sql += ' AND durationWeeks >= ?';
+      params.push(parseInt(durationMin, 10) || 0);
+    }
+    if (durationMax) {
+      sql += ' AND durationWeeks <= ?';
+      params.push(parseInt(durationMax, 10) || 0);
     }
     const [rows] = await db.execute(sql, params);
     const list = [];
@@ -144,7 +168,19 @@ router.post('/', authMiddleware, requireRole('company'), async (req, res) => {
       return res.status(400).json({ error: 'Title, city, deadline, and description are required.' });
 
     const createdAt = new Date().toISOString().split('T')[0];
-    const timeSlots = JSON.stringify([]);
+    let timeSlots = JSON.stringify([]);
+    if (req.body.time_slots && Array.isArray(req.body.time_slots) && req.body.time_slots.length > 0) {
+      const mappedSlots = req.body.time_slots.map(s => ({
+        id: Date.now() + Math.floor(Math.random() * 10000),
+        day: s.day || '',
+        startTime: s.startTime || '',
+        endTime: s.endTime || '',
+        type: s.type || 'full-time',
+        capacity: parseInt(s.capacity) || 1,
+        bookedBy: []
+      }));
+      timeSlots = JSON.stringify(mappedSlots);
+    }
     const sysadminApproved = 0;
     const status = 'open';
 
@@ -170,12 +206,54 @@ router.patch('/:id/approve', authMiddleware, requireRole('sysadmin', 'university
     const item = rows[0];
     if (!item) return res.status(404).json({ error: 'Internship not found.' });
     const approvedAt = new Date().toISOString();
-    await db.execute('UPDATE internships SET sysadminApproved = 1, approvedAt = ?, rejectionNote = NULL WHERE id = ?', [approvedAt, item.id]);
-    console.log(`Internship approved by System Admin: "${item.title}"`);
+    // Accept optional override reason when admin approves despite eligibility issues
+    const overrideReason = (req.body && (req.body.override_reason || req.body.overrideReason)) ? String(req.body.override_reason || req.body.overrideReason).trim() : null;
+    if (overrideReason) {
+      await db.execute('UPDATE internships SET sysadminApproved = 1, approvedAt = ?, rejectionNote = NULL, override_reason = ? WHERE id = ?', [approvedAt, overrideReason, item.id]);
+      console.log(`Internship approved with override by ${req.user ? req.user.name : 'admin'}: "${item.title}" — reason: ${overrideReason}`);
+    } else {
+      await db.execute('UPDATE internships SET sysadminApproved = 1, approvedAt = ?, rejectionNote = NULL, override_reason = NULL WHERE id = ?', [approvedAt, item.id]);
+      console.log(`Internship approved by System Admin: "${item.title}"`);
+    }
     const [updated] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [item.id]);
     res.json(updated[0]);
   } catch (err) {
     console.error('Approve internship error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// PATCH /api/internships/:id — company edits their internship (limited fields)
+router.patch('/:id', authMiddleware, requireRole('company'), async (req, res) => {
+  try {
+    const iid = parseInt(req.params.id);
+    const [rows] = await db.execute('SELECT * FROM internships WHERE id = ? AND companyId = ? LIMIT 1', [iid, req.user.id]);
+    const item = rows[0];
+    if (!item) return res.status(404).json({ error: 'Internship not found or access denied' });
+    // Only allow editing when not yet sysadmin approved
+    if (item.sysadminApproved && item.sysadminApproved == 1) return res.status(403).json({ error: 'Approved internships cannot be edited.' });
+
+    const allowed = ['title','city','deadline','description','stipend','type','durationWeeks','isRemote'];
+    const updates = [];
+    const params = [];
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        let val = req.body[key];
+        if (key === 'durationWeeks') val = parseInt(val) || 0;
+        if (key === 'isRemote') val = !!val ? 1 : 0;
+        updates.push(`${key} = ?`);
+        params.push(val);
+      }
+    }
+    if (updates.length) {
+      params.push(iid);
+      const sql = `UPDATE internships SET ${updates.join(', ')} WHERE id = ?`;
+      await db.execute(sql, params);
+    }
+    const [updatedRows] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [iid]);
+    res.json(updatedRows[0]);
+  } catch (err) {
+    console.error('Edit internship error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });

@@ -1,11 +1,23 @@
+// @ts-nocheck
 // student.js — Student portal pages
+
+function _isCompanyApproved(item) {
+  if (!item) return false;
+  return !!(
+    item.riphahApproved || item.universityApproved || item.sysadminApproved ||
+    item.status === 'approved' ||
+    item.riphah_approved || item.university_approved || item.sysadmin_approved
+  );
+}
 
 async function initStudentDashboard() {
   try {
-    const [internships, applications, feedback, selfFound] = await Promise.all([
+    let [internships, applications, feedback, selfFound] = await Promise.all([
       api.getInternships({}, authToken), api.getMyApplications(authToken),
       api.getMyFeedback(authToken), api.getMySelfFoundInternships(authToken),
     ]);
+    // show students only internships from companies approved by the university
+    internships = (internships || []).filter(i => _isCompanyApproved(i));
     const offers   = applications.filter(a => a.status === 'company_accepted');
     const unread   = feedback.filter(f => !f.read).length;
     const confirmed = applications.filter(a => a.status === 'student_confirmed' || a.status === 'university_approved');
@@ -65,13 +77,45 @@ async function initStudentDashboard() {
 
 async function initSearchPage() {
   try {
-    const [internships, profile] = await Promise.all([api.getInternships({}, authToken), api.getProfile(authToken)]);
-    window._allInternships = internships;
-    renderSearchPage(internships, profile);
+    let [internships, profile] = await Promise.all([api.getInternships({}, authToken), api.getProfile(authToken)]);
+    // only include internships from admin-approved companies for students
+    internships = (internships || []).filter(i => _isCompanyApproved(i));
+    // STEP 1 — Fetch student free time
+    let freeTime = [];
+    try { freeTime = await api.getStudentFreeTime(authToken) || []; } catch (e) { freeTime = []; }
+
+    // STEP 2 — Score each internship using student's free time and _timeOverlap
+    function matchScore(internship, freeTime) {
+      if (!internship.timeSlots || internship.timeSlots.length === 0) return null;
+      if (!freeTime || freeTime.length === 0) return null;
+      let matched = 0;
+      for (const slot of internship.timeSlots) {
+        const hasMatch = freeTime.some(ft =>
+          (ft.day === slot.day || ft.dayOfWeek === slot.day) &&
+          (typeof _timeOverlap === 'function' ? _timeOverlap(slot.startTime, slot.endTime, ft.startTime, ft.endTime) : (window._timeOverlap ? window._timeOverlap(slot.startTime, slot.endTime, ft.startTime, ft.endTime) : false))
+        );
+        if (hasMatch) matched++;
+      }
+      return Math.round((matched / internship.timeSlots.length) * 100);
+    }
+
+    const enriched = (internships || []).map(i => ({ ...i, matchScore: matchScore(i, freeTime) }));
+    // STEP 3 — Sort: score >= 50 first, then the rest; within groups sort by score desc
+    enriched.sort((a, b) => {
+      const aMatch = (a.matchScore !== null && a.matchScore >= 50) ? 1 : 0;
+      const bMatch = (b.matchScore !== null && b.matchScore >= 50) ? 1 : 0;
+      if (aMatch !== bMatch) return bMatch - aMatch;
+      const as = a.matchScore == null ? -1 : a.matchScore;
+      const bs = b.matchScore == null ? -1 : b.matchScore;
+      return bs - as;
+    });
+    window._allInternships = enriched;
+    renderSearchPage(enriched, profile);
   } catch(e) { showPageError(document.getElementById('page-search'), e.message); }
 }
 
 function renderSearchPage(internships, profile) {
+  window._searchProfile = profile || null;
   const issues = profile ? (profile.creditHours < 60 || profile.cgpa < 2.0 || !profile.electiveCourse) : false;
   document.getElementById('page-search').innerHTML = `
     <div class="page-header">
@@ -92,15 +136,20 @@ function renderSearchPage(internships, profile) {
         <option>Lahore</option><option>Karachi</option><option>Islamabad</option><option>Rawalpindi</option>
       </select>
     </div>
-    <div id="internship-list">${renderInternshipCards(internships)}</div>`;
+    <div id="internship-list">${renderInternshipCards(internships, profile)}</div>`;
 }
 
-function renderInternshipCards(list) {
+function renderInternshipCards(list, profile) {
   if (!list.length) return `<div class="empty-state"><div class="icon">🔍</div><p>No internships found.</p></div>`;
   return list.map(i => `
     <div class="internship-card">
       <div>
         <div class="title">${i.title} <span class="chip-ok">✓ Riphah Approved</span></div>
+        ${i.matchScore !== null && i.matchScore !== undefined ? (
+          i.matchScore >= 80 ? `<div style="margin-top:6px"><span style="font-size:11px; padding:2px 8px; border-radius:20px; background:#EAF3DE; color:#3B6D11;">Great match</span></div>` :
+          i.matchScore >= 50 ? `<div style="margin-top:6px"><span style="font-size:11px; padding:2px 8px; border-radius:20px; background:#EAF3FF; color:#0A3B8C;">Good match</span></div>` :
+          i.matchScore === 0 ? `<div style="margin-top:6px;color:var(--muted);font-size:12px">Low match</div>` : ''
+        ) : ''}
         <div class="company-name">${i.company}</div>
         <div class="meta">
           <span>📍 ${i.city}</span>
@@ -110,13 +159,15 @@ function renderInternshipCards(list) {
           <span>👥 ${i.applicantsCount||0} applicants</span>
         </div>
         ${i.timeSlots && i.timeSlots.length ? `<div class="meta" style="margin-top:4px;font-size:11px;color:var(--muted)">
-          <span>🕒 Time Slots: ${i.timeSlots.map(s => `${s.day} ${s.startTime}-${s.endTime} (${s.type})`).join(', ')}</span>
+          <span>🕒 Time Slots: ${i.timeSlots.map(s => `<span style="font-size:11px;background:var(--bg);border-radius:4px;padding:2px 7px;margin:2px;display:inline-block;">${s.day} ${s.startTime}–${s.endTime} (${s.type})</span>`).join('')}</span>
         </div>` : ''}
         ${i.description ? `<p style="font-size:12px;color:var(--muted);margin-top:8px">${i.description.substring(0,120)}${i.description.length>120?'...':''}</p>` : ''}
       </div>
       <div class="actions">
         ${badge(i.status)}
-        <button class="btn btn-primary btn-sm" onclick="applyForInternship(${i.id})">Apply Now</button>
+        ${((profile && (profile.verificationStatus === 'approved' || profile.accountStatus === 'verified')) || (typeof profile === 'undefined'))
+          ? `<button class="btn btn-primary btn-sm" onclick="applyForInternship(${i.id})">Apply Now</button>`
+          : `<button class="btn btn-primary btn-sm" disabled title="Your account must be verified by the university to apply">Apply (verify account)</button>`}
       </div>
     </div>`).join('');
 }
@@ -127,14 +178,15 @@ function filterInternships() {
   let list   = window._allInternships || [];
   if (q)    list = list.filter(i => i.title.toLowerCase().includes(q) || i.company.toLowerCase().includes(q));
   if (city) list = list.filter(i => i.city === city);
-  document.getElementById('internship-list').innerHTML = renderInternshipCards(list);
+  document.getElementById('internship-list').innerHTML = renderInternshipCards(list, window._searchProfile || null);
 }
 
 async function applyForInternship(id) {
   try {
     await api.apply(id, authToken);
     showToast('Application submitted successfully!', 'success');
-    window._allInternships = await api.getInternships({}, authToken);
+    // refresh only approved internships for students
+    window._allInternships = (await api.getInternships({}, authToken) || []).filter(i => _isCompanyApproved(i));
     filterInternships();
   } catch(e) { showToast(e.message, 'error'); }
 }
@@ -191,7 +243,7 @@ async function initDecisionsPage() {
           </div>
         </div>`).join('')}
       <div class="alert alert-info" style="margin-top:8px"><span class="alert-icon">ℹ️</span>
-        <div>After confirming, the university admin will review and give final approval.</div>
+        <div>After confirming, the university will review and give final approval.</div>
       </div>`}`;
   } catch(e) { showPageError(document.getElementById('page-decisions'), e.message); }
 }
@@ -227,6 +279,9 @@ async function initMyFeedback() {
           </div>
           <div style="font-size:13px;color:var(--text2);margin-bottom:10px">${f.message}</div>
           <div style="font-size:11px;color:var(--muted)">From: ${f.sentByName} · ${f.category||'General'}</div>
+          <div style="margin-top:8px">
+            ${f.read ? '<span style="font-size:11px;color:var(--muted)">Read</span>' : `<button class="btn btn-outline btn-sm" onclick="(async()=>{ try{ await api.markFeedbackRead(${f.id}, authToken); await initMyFeedback(); }catch(e){ showToast(e.message,'error'); } })()">Mark as Read</button>`}
+          </div>
         </div>`).join('')}`;
   } catch(e) { showPageError(document.getElementById('page-my-feedback'), e.message); }
 }
@@ -234,18 +289,9 @@ async function initMyFeedback() {
 // My Complaints — student view of complaints filed against them
 async function initMyComplaints() {
   try {
-    const complaints = await api.getComplaints();
-    // determine current user id
-    let uid = null;
-    try { if (typeof currentUser !== 'undefined' && currentUser && currentUser.id) uid = currentUser.id; } catch(e) {}
-    if (!uid) {
-      const tok = await _getLatestToken();
-      const dec = _dec(tok);
-      uid = dec && dec.id;
-    }
-    const mine = (complaints || []).filter(c => Number(c.studentId) === Number(uid));
+    const mine = await api.getMyComplaints(authToken);
     const pageEl = document.getElementById('page-my-complaints');
-    if (!mine.length) {
+    if (!mine || !mine.length) {
       pageEl.innerHTML = `
         <div class="page-header"><div><div class="page-title">My Complaints</div></div></div>
         <div class="card"><p>No complaints have been filed against you.</p></div>`;
@@ -318,7 +364,7 @@ function initSelfFoundPage() {
       </div>
     </div>
     <div class="alert alert-info"><span class="alert-icon">ℹ️</span>
-      <div>If you secured an internship independently, submit the details and offer letter below. The university admin will verify the company meets Riphah criteria and approve/reject your declaration.</div>
+      <div>If you secured an internship independently, submit the details and offer letter below. The university will verify the company meets Riphah criteria and approve/reject your declaration.</div>
     </div>
     <div class="card">
       <div class="form-row">
@@ -369,16 +415,23 @@ async function submitSelfFound() {
   if (letterInput && letterInput.files[0]) {
     try { d.offerLetterDoc = await readFileAsBase64(letterInput); } catch(e) { return showToast('File error: '+e.message,'error'); }
   }
+  // Debug: log payload before sending
+  try { console.log('Submitting self-found payload:', d); } catch (e) {}
   try {
-    await api.submitSelfFoundInternship(d, authToken);
-    showToast('Declaration submitted! Awaiting university admin review.', 'success');
+    const res = await api.submitSelfFoundInternship(d, authToken);
+    try { console.log('Self-found submit response:', res); } catch (e) {}
+    showToast('Declaration submitted! Awaiting university review.', 'success');
     navigateTo('dashboard');
   } catch(e) { showToast(e.message, 'error'); }
 }
 
 async function initStudentProfile() {
   try {
-    const [profile, freeTime] = await Promise.all([api.getProfile(authToken), api.getStudentFreeTime(authToken)]);
+    const [profile, freeTime, selfFound] = await Promise.all([api.getProfile(authToken), api.getStudentFreeTime(authToken), api.getMySelfFoundInternships(authToken)]);
+    if (!profile || profile.role !== 'student') {
+      showPageError(document.getElementById('page-profile'), 'Could not load your profile. Please sign in again.');
+      return;
+    }
     _freeTimeSlots = freeTime.slice();
     const issues  = [];
     if ((profile.creditHours||0) < 60) issues.push('Credit hours below 60 (' + (profile.creditHours||0) + '/60)');
@@ -393,7 +446,7 @@ async function initStudentProfile() {
         <div>Your profile meets all Riphah internship eligibility criteria.</div></div>`}
       <div class="card">
         <div style="display:flex;gap:16px;align-items:center;margin-bottom:22px">
-          <div class="avatar">${(profile.name||'?')[0].toUpperCase()}</div>
+          <div class="avatar">${(profile.name && profile.name.trim() ? profile.name.trim() : '?')[0].toUpperCase()}</div>
           <div>
             <div style="font-size:18px;font-weight:700">${profile.name}</div>
             <div class="text-muted">${profile.university} · ${profile.program||'—'} · Semester ${profile.semester||'—'}</div>
@@ -412,11 +465,19 @@ async function initStudentProfile() {
           <div class="form-group"><label>Elective Course</label><input id="p-elective" type="text" value="${profile.electiveCourse||''}" /></div>
           <div class="form-group"><label>Skills</label><input id="p-skills" type="text" value="${profile.skills||''}" /></div>
         </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-top:8px">
+          <input type="checkbox" id="p-enrolled" ${profile.enrolled ? 'checked' : ''} />
+          <label for="p-enrolled" style="margin:0;cursor:pointer">I am currently enrolled at Riphah</label>
+        </div>
         <div class="form-group">
           <label>Documents</label>
           <div style="font-size:13px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
-            <div>📄 Transcript: ${profile.transcriptDoc ? '<span class="text-green">✓ Uploaded</span>' : '<span class="text-red">Not uploaded</span>'}</div>
-            <div style="margin-top:4px">📄 Enrollment Letter: ${profile.enrollmentDoc ? '<span class="text-green">✓ Uploaded</span>' : '<span class="text-red">Not uploaded</span>'}</div>
+            <div style="margin-bottom:10px">
+              Transcript: 
+              ${(profile.transcriptDoc || profile.transcriptFileId) 
+                ? ('<span class="text-green">Uploaded ✓</span>' + (profile.transcriptFileId ? '<a href="#" onclick="viewFile(' + profile.transcriptFileId + ')" style="margin-left:8px;font-size:12px">View</a>' : ''))
+                : '<span class="text-red">Not uploaded</span>'}
+            </div>
           </div>
         </div>
         <div class="form-group">
@@ -437,6 +498,40 @@ async function initStudentProfile() {
         <button class="btn btn-primary" onclick="saveStudentProfile()">Save Changes</button>
       </div>`;
     renderFreeTimeList();
+
+    // Render Self-Found internships summary on student profile
+    try {
+      const sfArr = Array.isArray(selfFound) ? selfFound : (selfFound ? [selfFound] : []);
+      const sfCard = document.createElement('div');
+      sfCard.className = 'card';
+      const title = document.createElement('div'); title.className = 'card-title'; title.textContent = '📁 Self-Found Internships (' + sfArr.length + ')'; sfCard.appendChild(title);
+      if (!sfArr.length) {
+        const p = document.createElement('p'); p.className = 'text-muted'; p.textContent = 'No self-found internships submitted.'; sfCard.appendChild(p);
+      } else {
+        const wrapper = document.createElement('div'); wrapper.className = 'table-wrap';
+        const table = document.createElement('table');
+        table.innerHTML = '<thead><tr><th>Company</th><th>Submitted</th><th>Status</th><th>Offer</th></tr></thead>';
+        const tbody = document.createElement('tbody');
+        sfArr.forEach(sf => {
+          const tr = document.createElement('tr');
+          const tdCompany = document.createElement('td'); tdCompany.innerHTML = '<strong>' + (sf.companyName || '') + '</strong>'; tr.appendChild(tdCompany);
+          const tdSubmitted = document.createElement('td'); tdSubmitted.textContent = sf.submittedAt ? new Date(sf.submittedAt).toLocaleDateString() : ''; tr.appendChild(tdSubmitted);
+          const tdStatus = document.createElement('td'); tdStatus.innerHTML = badge(sf.status); tr.appendChild(tdStatus);
+          const tdOffer = document.createElement('td');
+          if (sf.offerLetterDoc) {
+            const btn = document.createElement('button'); btn.className = 'btn btn-outline btn-sm'; btn.textContent = 'View Offer';
+            btn.addEventListener('click', () => openBase64(sf.offerLetterDoc, 'offer_' + (sf.studentName || 'offer')));
+            tdOffer.appendChild(btn);
+          } else {
+            tdOffer.innerHTML = '<span class="text-muted">No offer uploaded</span>';
+          }
+          tr.appendChild(tdOffer);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody); wrapper.appendChild(table); sfCard.appendChild(wrapper);
+      }
+      document.getElementById('page-profile').appendChild(sfCard);
+    } catch (e) { /* non-fatal */ }
   } catch(e) { showPageError(document.getElementById('page-profile'), e.message); }
 }
 
@@ -449,6 +544,7 @@ async function saveStudentProfile() {
       creditHours:   parseInt(document.getElementById('p-credits').value),
       electiveCourse: document.getElementById('p-elective').value,
       skills:        document.getElementById('p-skills').value,
+      enrolled:      document.getElementById('p-enrolled') ? (document.getElementById('p-enrolled').checked ? 1 : 0) : 0,
     }, authToken);
     await saveFreeTime();
     showToast('Profile saved!', 'success');
@@ -482,4 +578,129 @@ async function saveFreeTime() {
     showToast('Free time saved!', 'success');
     initStudentProfile();
   } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function uploadDoc(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('File too large. Max 5MB allowed.', 'error');
+    return;
+  }
+  try {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const base64 = e.target.result;
+        const tok = authToken || localStorage.getItem('ib_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (tok) headers['Authorization'] = 'Bearer ' + tok;
+        const fileName = type + '_' + Date.now() + '.' + file.name.split('.').pop();
+        const uploadRes = await fetch('/api/profile/upload', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ fileName, fileType: file.type, base64 })
+        });
+        if (!uploadRes.ok) {
+          const body = await uploadRes.json().catch(() => ({}));
+          showToast(body.error || 'Upload failed.', 'error');
+          return;
+        }
+        const uploadData = await uploadRes.json();
+        const fileId = uploadData.fileId;
+        const profileField = type === 'transcript' ? 'transcriptFileId' : 'cvFileId';
+        const docField = type === 'transcript' ? 'transcriptDoc' : 'enrollmentDoc';
+        await api.updateProfile({ [profileField]: fileId, [docField]: base64 }, tok);
+        showToast(type === 'transcript' ? 'Transcript uploaded!' : 'Enrollment letter uploaded!', 'success');
+        await new Promise(r => setTimeout(r, 300));
+        await initStudentProfile();
+      } catch(err) {
+        showToast('Upload failed: ' + err.message, 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  } catch(e) {
+    showToast('Upload failed: ' + e.message, 'error');
+  }
+}
+
+async function viewFile(fileId) {
+  try {
+    const tok = authToken || localStorage.getItem('ib_token');
+    const headers = {};
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    const res = await fetch('/api/profile/file/' + fileId, { headers });
+    if (!res.ok) { showToast('Could not load file.', 'error'); return; }
+    const data = await res.json();
+    if (!data.base64) { showToast('File not available.', 'error'); return; }
+
+    // Build correct data URI — handle both cases:
+    // 1) base64 already has "data:..." prefix (new uploads)
+    // 2) base64 is raw without prefix (old uploads)
+    let src = data.base64;
+    if (!src.startsWith('data:')) {
+      const mime = data.fileType || 'application/octet-stream';
+      src = 'data:' + mime + ';base64,' + src;
+    }
+
+    openDocumentPreview(src, data.fileName || 'Document');
+  } catch(e) {
+    showToast('Error loading file: ' + e.message, 'error');
+  }
+}
+
+function openBase64(encoded, fileName) {
+  try {
+    if (!encoded) return showToast('File not available.', 'error');
+    let src = encoded;
+    if (typeof src === 'string') {
+      try { src = decodeURIComponent(src); } catch (e) {}
+      const fileRoute = src.match(/\/api\/profile\/file\/(\d+)(?:\/[^/?#]+)?(?:[?#]|$)/);
+      if (fileRoute) return viewFile(Number(fileRoute[1]));
+      if (!/^(data:|https?:\/\/|\/|blob:)/i.test(src)) src = 'data:application/pdf;base64,' + src;
+    }
+    openDocumentPreview(src, fileName || 'Document');
+  } catch (e) { showToast('Cannot open file: ' + (e.message || ''), 'error'); }
+}
+
+function openDocumentPreview(src, title) {
+  const overlay = document.createElement('div');
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', title || 'Document preview');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:1100;background:rgba(17,24,39,.72);display:flex;align-items:center;justify-content:center;padding:20px';
+
+  const panel = document.createElement('div');
+  panel.style.cssText = 'display:flex;flex-direction:column;width:min(1100px,100%);height:min(90vh,900px);background:var(--card,#fff);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden';
+
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;border-bottom:1px solid var(--border,#ddd)';
+  const heading = document.createElement('strong');
+  heading.textContent = title || 'Document preview';
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'btn btn-outline btn-sm';
+  closeButton.textContent = 'Close';
+  closeButton.setAttribute('aria-label', 'Close document preview');
+  closeButton.onclick = () => overlay.remove();
+  header.append(heading, closeButton);
+
+  const content = document.createElement('div');
+  content.style.cssText = 'display:flex;align-items:center;justify-content:center;flex:1;min-height:0;background:#f3f4f6';
+  const isImage = /^data:image\//i.test(src) || /\.(png|jpe?g|gif|webp)(?:[?#]|$)/i.test(src);
+  const viewer = document.createElement(isImage ? 'img' : 'iframe');
+  viewer.src = src;
+  viewer.style.cssText = isImage
+    ? 'display:block;max-width:100%;max-height:100%;object-fit:contain'
+    : 'width:100%;height:100%;border:0;background:#fff';
+  if (isImage) viewer.alt = title || 'Document preview';
+  else viewer.title = title || 'Document preview';
+  content.appendChild(viewer);
+  panel.append(header, content);
+  overlay.appendChild(panel);
+  overlay.addEventListener('click', event => {
+    if (event.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+  closeButton.focus();
 }

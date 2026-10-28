@@ -1,10 +1,11 @@
+// @ts-nocheck
 // ================================================================
 // InternBridge — api.js  (In-memory DB with localStorage persistence)
 // ================================================================
 
 const _dbDefaults = {
   users: [
-    { id:1, name:'University Admin',  email:'S@riphah.edu.pk',    password:'Salam123',    role:'university', university:'Riphah International University', department:'Faculty of Computing' },
+    { id:1, name:'University',  email:'S@riphah.edu.pk',    password:'Salam123',    role:'university', university:'Riphah International University', department:'Faculty of Computing' },
     { id:2, name:'System Admin',      email:'A@riphah.edu.pk', password:'Salam321', role:'sysadmin' },
   ],
   internships:[], applications:[], complaints:[], universityFeedback:[], selfFoundInternships:[],
@@ -47,6 +48,21 @@ const _dbDefaults = {
   },
   _next:{users:3,internships:1,applications:1,log:1,complaints:1,feedback:1,selfFound:1,company_time_slots:1,student_free_time:1},
 };
+
+// Expose simple helpers for other frontend modules to get normalized auth token/headers
+try {
+  window.getAuthToken = async function() {
+    try {
+      const t = await _getLatestToken();
+      if (!t) return null;
+      return typeof t === 'string' && t.startsWith('Bearer ') ? t.split(' ')[1] : t;
+    } catch (e) { return null; }
+  };
+  window.getAuthHeaders = async function() {
+    const tok = await window.getAuthToken();
+    return tok ? { Authorization: 'Bearer ' + tok } : {};
+  };
+} catch (e) {}
 
 // Load from localStorage or use defaults
 let _db;
@@ -119,6 +135,17 @@ function _resolveToken(t) {
   return null;
 }
 
+// Safely parse JSON responses; if parsing fails, include text for debugging
+async function _parseOrText(res) {
+  try {
+    return await res.json();
+  } catch (e) {
+    const txt = await res.text().catch(() => null);
+    if (txt) throw new Error('Invalid server response: ' + (txt.length > 200 ? txt.slice(0, 200) + '...' : txt));
+    throw e;
+  }
+}
+
 function _eligStudent(s) {
   const i = [];
   if ((s.creditHours||0) < 60) i.push('Less than 60 credit hours (' + (s.creditHours||0) + '/60)');
@@ -151,7 +178,7 @@ const api = {
         // For authentication errors (401/400), propagate error to caller instead of falling back
         throw new Error(body.error || body.message || 'Invalid email or password.');
       }
-      const data = await res.json();
+      const data = await _parseOrText(res);
       // Persist backend token to global `authToken` (if present) and localStorage so other modules can use it
       try {
         if (data && data.token) {
@@ -170,30 +197,154 @@ const api = {
       if (u.role === 'student' && u.verificationStatus !== 'approved')
         throw new Error(u.verificationStatus === 'rejected'
           ? 'Your account was rejected. Contact Faculty of Computing.'
-          : 'Account pending university admin verification. Please wait.');
+          : 'Account pending university verification. Please wait.');
       if (u.role === 'company' && u.status !== 'verified')
         throw new Error(u.status === 'rejected'
-          ? 'Your company was rejected. Contact university admin.'
-          : 'Company account pending university admin verification. Please wait.');
+          ? 'Your company was rejected. Contact university.'
+          : 'Company account pending university verification. Please wait.');
       _log(u.name + ' logged in', 'info');
       return { token: null, user: { id:u.id, name:u.name, email:u.email, role:u.role } };
     }
   },
 
   registerStudent: async (d) => {
-    await _delay();
-    if (!d.name||!d.email||!d.password) throw new Error('Name, email and password are required.');
-    if (_db.users.find(u => u.email === d.email)) throw new Error('This email is already registered.');
-    _db.users.push({
-      id:_db._next.users++, name:d.name, email:d.email, password:d.password, role:'student',
-      university:'Riphah International University', program:d.program||'', semester:parseInt(d.semester)||0,
-      cgpa:parseFloat(d.cgpa)||0, creditHours:parseInt(d.creditHours)||0, electiveCourse:d.electiveCourse||'',
-      skills:d.skills||'', transcriptDoc:d.transcriptDoc||null, enrollmentDoc:d.enrollmentDoc||null, cv:null,
-      verificationStatus:'pending', verificationNote:'', registeredAt:new Date().toISOString(),
-    });
-    _log('Student registered (pending): ' + d.name, 'info');
-    _save();
-    return { message: 'Registration submitted! Awaiting university admin verification.' };
+    // Try backend API first
+    try {
+      const res = await fetch('/api/auth/register/student', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(d)
+      });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to register student.'); }
+      return await _parseOrText(res);
+    } catch (err) {
+      // Fallback to in-memory simulation when offline
+      await _delay();
+      if (!d.name||!d.email||!d.password) throw new Error('Name, email and password are required.');
+      if (_db.users.find(u => u.email === d.email)) throw new Error('This email is already registered.');
+      _db.users.push({
+        id:_db._next.users++, name:d.name, email:d.email, password:d.password, role:'student',
+        university:'Riphah International University', program:d.program||'', semester:parseInt(d.semester)||0,
+        cgpa:parseFloat(d.cgpa)||0, creditHours:parseInt(d.creditHours)||0, electiveCourse:d.electiveCourse||'',
+        skills:d.skills||'', transcriptDoc:d.transcriptDoc||null, enrollmentDoc:d.enrollmentDoc||null, cv:null,
+        verificationStatus:'pending', verificationNote:'', registeredAt:new Date().toISOString(),
+      });
+      _log('Student registered (pending): ' + d.name, 'info');
+      _save();
+      return { message: 'Registration submitted! Awaiting university verification.' };
+    }
+  },
+
+  verifyOtp: async (email, otp) => {
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, otp })
+      });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to verify OTP.'); }
+      return await _parseOrText(res);
+    } catch (err) {
+      await _delay();
+      // In-memory fallback: check simulated password_resets stored in localStorage
+      const resets = JSON.parse(localStorage.getItem('ib_password_resets') || '{}');
+      // Fallback cannot reliably verify by email; return generic error
+      throw new Error(err.message || 'Failed to verify OTP.');
+    }
+  },
+
+  resendOtp: async (email) => {
+    try {
+      const res = await fetch('/api/auth/resend-otp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email })
+      });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to resend OTP.'); }
+      return await _parseOrText(res);
+    } catch (err) {
+      // Fallback: simulate resend in local dev (store a new code in localStorage)
+      await _delay();
+      const u = _db.users.find(u => u.email && u.email.toLowerCase() === (email||'').toLowerCase());
+      if (!u) throw new Error('Invalid request.');
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires = Date.now() + 10 * 60 * 1000;
+      const resets = JSON.parse(localStorage.getItem('ib_password_resets') || '{}');
+      resets[email.toLowerCase()] = { otp, expires }; localStorage.setItem('ib_password_resets', JSON.stringify(resets));
+      console.log('DEV resend OTP for', email, otp);
+      return { message: 'New OTP sent to your email.' };
+    }
+  },
+
+  // Notifications API
+  loadNotifications: async () => {
+    try {
+      const headers = {};
+      const tok = await _getLatestToken();
+      if (!tok) {
+        // Not logged in — return local fallback immediately to avoid 401/403 console errors
+        const notifs = JSON.parse(localStorage.getItem('ib_notifications') || '[]');
+        try {
+          const unread = (notifs || []).filter(r => r.isRead == 0).length;
+          const badge = document.getElementById('notif-badge');
+          if (badge) {
+            if (unread > 0) { badge.textContent = unread; badge.style.display = ''; } else { badge.style.display = 'none'; }
+          }
+        } catch (e) {}
+        return notifs;
+      }
+      if (tok) { const t = typeof tok === 'string' && tok.startsWith('Bearer ') ? tok.split(' ')[1] : tok; headers['Authorization'] = 'Bearer ' + t; }
+      const res = await fetch('/api/notifications', { headers });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to load notifications.'); }
+      const rows = await _parseOrText(res);
+      // update UI badge if present
+      try {
+        const unread = (rows || []).filter(r => r.isRead == 0).length;
+        const badge = document.getElementById('notif-badge');
+        if (badge) {
+          if (unread > 0) { badge.textContent = unread; badge.style.display = ''; } else { badge.style.display = 'none'; }
+        }
+      } catch (e) {}
+      return rows;
+    } catch (err) {
+      await _delay();
+      // fallback: return in-memory stored notifications keyed by email
+      const notifs = JSON.parse(localStorage.getItem('ib_notifications') || '[]');
+      const unread = (notifs || []).filter(r => r.isRead == 0).length;
+      const badge = document.getElementById('notif-badge'); if (badge) { if (unread>0) { badge.textContent = unread; badge.style.display=''; } else badge.style.display='none'; }
+      return notifs;
+    }
+  },
+
+  markNotificationRead: async (id) => {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      const tok = await _getLatestToken();
+      if (tok) { const t = typeof tok === 'string' && tok.startsWith('Bearer ') ? tok.split(' ')[1] : tok; headers['Authorization'] = 'Bearer ' + t; }
+      const res = await fetch('/api/notifications/' + id + '/read', { method: 'PATCH', headers });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to mark notification read.'); }
+      return await _parseOrText(res);
+    } catch (err) {
+      await _delay();
+      // fallback: update localStorage
+      const notifs = JSON.parse(localStorage.getItem('ib_notifications') || '[]');
+      const n = notifs.find(x => x.id == id); if (n) n.isRead = 1; localStorage.setItem('ib_notifications', JSON.stringify(notifs));
+      return { message: 'Marked as read.' };
+    }
+  },
+
+  markAllRead: async () => {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      const tok = await _getLatestToken();
+      if (tok) { const t = typeof tok === 'string' && tok.startsWith('Bearer ') ? tok.split(' ')[1] : tok; headers['Authorization'] = 'Bearer ' + t; }
+      const res = await fetch('/api/notifications/read-all', { method: 'PATCH', headers });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to mark all read.'); }
+      // clear badge
+      const badge = document.getElementById('notif-badge'); if (badge) badge.style.display = 'none';
+      return await _parseOrText(res);
+    } catch (err) {
+      await _delay();
+      const notifs = JSON.parse(localStorage.getItem('ib_notifications') || '[]'); notifs.forEach(n => n.isRead = 1); localStorage.setItem('ib_notifications', JSON.stringify(notifs));
+      const badge = document.getElementById('notif-badge'); if (badge) badge.style.display = 'none';
+      return { message: 'All marked as read.' };
+    }
   },
 
   registerCompany: async (d) => {
@@ -208,22 +359,24 @@ const api = {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || body.message || 'Failed to register company.');
       }
-      return await res.json();
+      return await _parseOrText(res);
     } catch (err) {
       // Fallback to in-memory simulation for offline/dev
       await _delay();
       if (!d.name||!d.email||!d.password) throw new Error('Name, email and password are required.');
       if (_db.users.find(u => u.email === d.email)) throw new Error('This email is already registered.');
+      // store unified registration info in in-memory user for dev fallback
       _db.users.push({
         id:_db._next.users++, name:d.name, email:d.email, password:d.password, role:'company',
         city:d.city||'', pasha:d.pasha||'', pseb:d.pseb||'', secp:d.secp||'',
+        registrationType: d.registrationType || null, registrationId: d.registrationId || null, yearOfRegistration: d.yearOfRegistration || null,
         cmmi:d.cmmi||'', operational:d.operational||'',
         regCertDoc:d.regCertDoc||null, cmmiDoc:d.cmmiDoc||null,
         status:'pending', rejectionNote:'', registeredAt:new Date().toISOString(),
       });
       _log('Company registered (pending): ' + d.name, 'warning');
       _save();
-      return { message: 'Company registered. Awaiting university admin verification.' };
+      return { message: 'Company registered. Awaiting university verification.' };
     }
   },
 
@@ -234,7 +387,7 @@ const api = {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email })
       });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to request password reset.'); }
-      return await res.json();
+      return await _parseOrText(res);
     } catch (err) {
       // Fallback: simulate token and store in localStorage for dev
       await _delay();
@@ -285,7 +438,7 @@ const api = {
       }
       const res = await fetch(url, { headers });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch internships'); }
-      const list = await res.json();
+      const list = await _parseOrText(res);
       // parse timeSlots if stored as JSON string
       return list.map(i => ({ ...i, timeSlots: i.timeSlots && typeof i.timeSlots === 'string' ? JSON.parse(i.timeSlots) : (i.timeSlots||[]) }));
     } catch (err) {
@@ -304,7 +457,7 @@ const api = {
       const tok = await _getLatestToken();
       const res = await fetch('/api/internships/all', { headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch'); }
-      const rows = await res.json();
+      const rows = await _parseOrText(res);
       return rows.map(i => ({
         ...i,
         timeSlots: i.timeSlots && typeof i.timeSlots === 'string' ? JSON.parse(i.timeSlots) : (i.timeSlots||[]),
@@ -338,7 +491,7 @@ const api = {
       if (t) { const tok = typeof t === 'string' && t.startsWith('Bearer ') ? t.split(' ')[1] : t; headers['Authorization'] = 'Bearer ' + tok; }
       const res = await fetch('/api/internships', { method: 'POST', headers, body: JSON.stringify(d) });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to create internship'); }
-      const row = await res.json();
+      const row = await _parseOrText(res);
       row.timeSlots = row.timeSlots && typeof row.timeSlots === 'string' ? JSON.parse(row.timeSlots) : (row.timeSlots||[]);
       return row;
     } catch (err) {
@@ -350,18 +503,47 @@ const api = {
     }
   },
 
-  approveInternship: async (id) => {
+  updateInternship: async (id, data, t) => {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (t) { const tok = typeof t === 'string' && t.startsWith('Bearer ') ? t.split(' ')[1] : t; headers['Authorization'] = 'Bearer ' + tok; }
+      const res = await fetch('/api/internships/' + encodeURIComponent(id), { method: 'PATCH', headers, body: JSON.stringify(data) });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to update internship'); }
+      return await _parseOrText(res);
+    } catch (err) {
+      await _delay(); throw err;
+    }
+  },
+
+  approveInternship: async (id, overrideReason) => {
     try {
       const tok = await _getLatestToken();
-      const res = await fetch('/api/internships/' + id + '/approve', { method: 'PATCH', headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
+      const headers = {};
+      if (tok) headers['Authorization'] = 'Bearer ' + tok;
+      const options = { method: 'PATCH', headers };
+      if (overrideReason !== undefined && overrideReason !== null) {
+        headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify({ override_reason: overrideReason });
+      }
+      const res = await fetch('/api/internships/' + id + '/approve', options);
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to approve'); }
-      const row = await res.json(); row.timeSlots = row.timeSlots && typeof row.timeSlots === 'string' ? JSON.parse(row.timeSlots) : (row.timeSlots||[]); return row;
-    } catch (err) { await _delay(); const i = _db.internships.find(x => x.id === id); if (!i) throw new Error('Not found.'); i.riphahApproved = true; i.approvedAt = new Date().toISOString(); _log('Internship approved: ' + i.title, 'success'); _save(); return i; }
+      const row = await _parseOrText(res); row.timeSlots = row.timeSlots && typeof row.timeSlots === 'string' ? JSON.parse(row.timeSlots) : (row.timeSlots||[]); return row;
+    } catch (err) {
+      await _delay();
+      const i = _db.internships.find(x => x.id === id);
+      if (!i) throw new Error('Not found.');
+      i.riphahApproved = true; i.approvedAt = new Date().toISOString();
+      if (overrideReason) i.override_reason = overrideReason;
+      _log('Internship approved: ' + i.title, 'success'); _save(); return i;
+    }
   },
 
   rejectInternship: async (id, note) => {
     try {
-      const res = await fetch('/api/internships/' + id + '/reject', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note }) });
+      const tok = localStorage.getItem('ib_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (tok) headers['Authorization'] = 'Bearer ' + tok;
+      const res = await fetch('/api/internships/' + id + '/reject', { method: 'PATCH', headers, body: JSON.stringify({ note }) });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to reject'); }
       const row = await res.json(); row.timeSlots = row.timeSlots && typeof row.timeSlots === 'string' ? JSON.parse(row.timeSlots) : (row.timeSlots||[]); return row;
     } catch (err) { await _delay(); const i = _db.internships.find(x => x.id === id); if (!i) throw new Error('Not found.'); i.riphahApproved = false; i.status = 'closed'; i.rejectionNote = note||''; _log('Internship rejected: ' + i.title, 'warning'); _save(); return i; }
@@ -373,7 +555,7 @@ const api = {
       if (t) { const tok = typeof t === 'string' && t.startsWith('Bearer ') ? t.split(' ')[1] : t; headers['Authorization'] = 'Bearer ' + tok; }
       const res = await fetch('/api/internships/' + id, { method: 'DELETE', headers });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to close'); }
-      return await res.json();
+      return await _parseOrText(res);
     } catch (err) { await _delay(); const u = _dec(t); const i = _db.internships.find(x => x.id === id && x.companyId === u.id); if (!i) throw new Error('Not found.'); i.status = 'closed'; _save(); return { message: 'Closed.' }; }
   },
 
@@ -382,12 +564,14 @@ const api = {
     if (t) { const tok = typeof t === 'string' && t.startsWith('Bearer ') ? t.split(' ')[1] : t; headers['Authorization'] = 'Bearer ' + tok; }
     const res = await fetch('/api/applications', { method: 'POST', headers, body: JSON.stringify({ internshipId: parseInt(internshipId) }) });
     if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to apply'); }
-    return await res.json();
+    return await _parseOrText(res);
   },
 
   getMyApplications: async (t) => {
     const headers = {};
-    if (t) { const tok = typeof t === 'string' && t.startsWith('Bearer ') ? t.split(' ')[1] : t; headers['Authorization'] = 'Bearer ' + tok; }
+    const tok = t || await _getLatestToken();
+    if (!tok) { await _delay(); return []; }
+    if (tok) { const tokVal = typeof tok === 'string' && tok.startsWith('Bearer ') ? tok.split(' ')[1] : tok; headers['Authorization'] = 'Bearer ' + tokVal; }
     const res = await fetch('/api/applications/mine', { headers });
     if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch'); }
     try { return await res.json(); } catch (e) { throw new Error('Invalid server response while fetching applications.'); }
@@ -471,7 +655,9 @@ const api = {
 
   getAllSelfFoundInternships: async () => {
     try {
-      const res = await fetch('/api/self-found');
+      const tok = localStorage.getItem('ib_token');
+      const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+      const res = await fetch('/api/self-found', { headers });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch'); }
       return await res.json();
     } catch (err) {
@@ -482,8 +668,14 @@ const api = {
   reviewSelfFoundInternship: async (id, status, note) => {
     // Backend review endpoint
     try {
+      const tok = await _getLatestToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (tok) {
+        const t = typeof tok === 'string' && tok.startsWith('Bearer ') ? tok.split(' ')[1] : tok;
+        headers['Authorization'] = 'Bearer ' + t;
+      }
       const res = await fetch('/api/self-found/' + id + '/review', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, adminNote: note||'' })
+        method: 'PATCH', headers, body: JSON.stringify({ status, adminNote: note||'' })
       });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to review'); }
       return await res.json();
@@ -498,27 +690,58 @@ const api = {
   },
 
   getCompanies: async () => {
-    await _delay();
-    return _db.users.filter(u => u.role === 'company').map(c => ({
-      id:c.id, name:c.name, email:c.email, city:c.city, pasha:c.pasha, pseb:c.pseb, secp:c.secp,
-      cmmi:c.cmmi, operational:c.operational, regCertDoc:c.regCertDoc, cmmiDoc:c.cmmiDoc,
-      status:c.status||'pending', rejectionNote:c.rejectionNote||'', registeredAt:c.registeredAt,
-      internshipsCount:_db.internships.filter(i => i.companyId === c.id).length,
-    }));
+    // Try backend protected endpoint first
+    try {
+      const tok = await _getLatestToken();
+      const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+      const res = await fetch('/api/admin/companies', { headers });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch companies'); }
+      return await res.json();
+    } catch (err) {
+      // fallback to in-memory
+      await _delay();
+      return _db.users.filter(u => u.role === 'company').map(c => ({
+        id:c.id, name:c.name, email:c.email, city:c.city, pasha:c.pasha, pseb:c.pseb, secp:c.secp,
+        cmmi:c.cmmi, operational:c.operational, regCertDoc:c.regCertDoc, cmmiDoc:c.cmmiDoc,
+        status:c.status||'pending', rejectionNote:c.rejectionNote||'', registeredAt:c.registeredAt,
+        internshipsCount:_db.internships.filter(i => i.companyId === c.id).length,
+      }));
+    }
   },
 
   updateCompany: async (id, status, note) => {
-    await _delay();
-    const c = _db.users.find(u => u.id === id && u.role === 'company');
-    if (!c) throw new Error('Not found.');
-    c.status = status; c.rejectionNote = note||'';
-    _log('Company ' + c.name + ' ' + status, status === 'verified' ? 'success' : 'warning');
-    _save(); return { message: 'Company ' + status };
+    // Try backend protected endpoint first
+    try {
+      const tok = await _getLatestToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (tok) headers['Authorization'] = 'Bearer ' + tok;
+      const res = await fetch('/api/admin/companies/' + encodeURIComponent(id), { method: 'PATCH', headers, body: JSON.stringify({ status, reason: note || '' }) });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to update company.'); }
+      return await res.json();
+    } catch (err) {
+      // fallback to in-memory
+      await _delay();
+      const c = _db.users.find(u => u.id === id && u.role === 'company');
+      if (!c) throw new Error('Not found.');
+      c.status = status; c.rejectionNote = note||'';
+      _log('Company ' + c.name + ' ' + status, status === 'verified' ? 'success' : 'warning');
+      _save(); return { message: 'Company ' + status };
+    }
   },
 
   getPendingStudents: async () => {
-    await _delay();
-    return _db.users.filter(u => u.role === 'student' && u.verificationStatus === 'pending').map(({ password, ...s }) => s);
+    // Try backend API first (protected route)
+    try {
+      const tok = await _getLatestToken();
+      const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+      const res = await fetch('/api/admin/students/pending', { headers });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch pending students'); }
+      return await res.json();
+    } catch (err) {
+      // fallback to in-memory
+      await _delay();
+      return _db.users.filter(u => u.role === 'student' && u.verificationStatus === 'pending').map(({ password, ...s }) => s);
+    }
   },
 
   getAllStudents: async () => {
@@ -527,12 +750,23 @@ const api = {
   },
 
   verifyStudent: async (id, status, note) => {
-    await _delay();
-    const s = _db.users.find(u => u.id === id && u.role === 'student');
-    if (!s) throw new Error('Not found.');
-    s.verificationStatus = status; s.verificationNote = note||'';
-    _log('Student ' + s.name + ' ' + status, status === 'approved' ? 'success' : 'warning');
-    _save(); return { message: 'Student ' + status };
+    // Use backend protected endpoint when available
+    try {
+      const tok = await _getLatestToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (tok) headers['Authorization'] = 'Bearer ' + tok;
+      const res = await fetch('/api/admin/students/' + encodeURIComponent(id), { method: 'PATCH', headers, body: JSON.stringify({ decision: status === 'approved' ? 'approve' : 'reject', reason: note || '' }) });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to update student.'); }
+      return await res.json();
+    } catch (err) {
+      // fallback to in-memory
+      await _delay();
+      const s = _db.users.find(u => u.id === id && u.role === 'student');
+      if (!s) throw new Error('Not found.');
+      s.verificationStatus = status; s.verificationNote = note||'';
+      _log('Student ' + s.name + ' ' + status, status === 'approved' ? 'success' : 'warning');
+      _save(); return { message: 'Student ' + status };
+    }
   },
 
   getComplaints: async (t) => {
@@ -541,6 +775,15 @@ const api = {
     if (token) { const tok = typeof token === 'string' && token.startsWith('Bearer ') ? token.split(' ')[1] : token; headers['Authorization'] = 'Bearer ' + tok; }
     const res = await fetch('/api/admin/complaints', { headers });
     if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch complaints'); }
+    return await res.json();
+  },
+
+  getMyComplaints: async (t) => {
+    const headers = {};
+    const token = t || (typeof authToken !== 'undefined' ? authToken : null) || localStorage.getItem('ib_token');
+    if (token) { const tok = typeof token === 'string' && token.startsWith('Bearer ') ? token.split(' ')[1] : token; headers['Authorization'] = 'Bearer ' + tok; }
+    const res = await fetch('/api/admin/complaints/mine', { headers });
+    if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch my complaints'); }
     return await res.json();
   },
 
@@ -566,6 +809,33 @@ const api = {
     const res = await fetch('/api/profile/feedback', { headers });
     if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch feedback'); }
     try { return await res.json(); } catch (e) { throw new Error('Invalid server response while fetching feedback.'); }
+  },
+
+  markFeedbackRead: async (id, t) => {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      const token = t || (typeof authToken !== 'undefined' ? authToken : null) || localStorage.getItem('ib_token');
+      if (token) { const tok = typeof token === 'string' && token.startsWith('Bearer ') ? token.split(' ')[1] : token; headers['Authorization'] = 'Bearer ' + tok; }
+      const res = await fetch('/api/admin/feedback/' + encodeURIComponent(id) + '/read', { method: 'PATCH', headers });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to mark feedback read'); }
+      return await _parseOrText(res);
+    } catch (err) {
+      await _delay(); // in-memory fallback: mark local
+      const fb = _db.universityFeedback.find(x => x.id == id); if (fb) fb.read = 1; _save(); return { message: 'Marked as read.' };
+    }
+  },
+
+  deleteFeedback: async (id, t) => {
+    try {
+      const headers = {};
+      const token = t || (typeof authToken !== 'undefined' ? authToken : null) || localStorage.getItem('ib_token');
+      if (token) { const tok = typeof token === 'string' && token.startsWith('Bearer ') ? token.split(' ')[1] : token; headers['Authorization'] = 'Bearer ' + tok; }
+      const res = await fetch('/api/admin/feedback/' + encodeURIComponent(id), { method: 'DELETE', headers });
+      if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to delete feedback'); }
+      return await _parseOrText(res);
+    } catch (err) {
+      await _delay(); const idx = _db.universityFeedback.findIndex(x => x.id == id); if (idx >= 0) { _db.universityFeedback.splice(idx,1); _save(); } return { message: 'Deleted.' };
+    }
   },
 
   sendFeedback: async (d, t) => {
@@ -597,23 +867,11 @@ const api = {
   },
 
   getAdminStats: async () => {
-    await _delay();
-    const cos = _db.users.filter(u => u.role === 'company');
-    const sts = _db.users.filter(u => u.role === 'student');
-    return {
-      totalStudents:sts.length, pendingStudents:sts.filter(s => s.verificationStatus === 'pending').length,
-      approvedStudents:sts.filter(s => s.verificationStatus === 'approved').length,
-      totalCompanies:cos.length, verifiedCompanies:cos.filter(c => c.status === 'verified').length,
-      pendingCompanies:cos.filter(c => c.status === 'pending').length,
-      totalInternships:_db.internships.length, openInternships:_db.internships.filter(i => i.status === 'open').length,
-      riphahApproved:_db.internships.filter(i => i.riphahApproved).length,
-      pendingApproval:_db.internships.filter(i => !i.riphahApproved && i.status === 'open').length,
-      totalApplications:_db.applications.length,
-      pendingApplications:_db.applications.filter(a => a.status === 'pending').length,
-      confirmedApplications:_db.applications.filter(a => a.status === 'student_confirmed' || a.status === 'university_approved').length,
-      openComplaints:_db.complaints.filter(c => c.status === 'open').length,
-      pendingSelfFound:_db.selfFoundInternships.filter(s => s.status === 'pending').length,
-    };
+    const tok = localStorage.getItem('ib_token');
+    const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+    const res = await fetch('/api/admin/stats', { headers });
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || 'Failed to fetch stats.'); }
+    return await res.json();
   },
 
   getUniProfile: async () => {
@@ -633,26 +891,36 @@ const api = {
   },
 
   getUsers: async () => {
-    await _delay();
-    return _db.users.map(({ password, ...u }) => u);
+    const tok = localStorage.getItem('ib_token');
+    const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+    const res = await fetch('/api/admin/users', { headers });
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || 'Failed to fetch users.'); }
+    return await res.json();
+  },
+
+  getStudentsList: async () => {
+    const tok = await _getLatestToken();
+    const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+    const res = await fetch('/api/admin/students-list', { headers });
+    if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch students.'); }
+    return await res.json();
   },
 
   deleteUser: async (id) => {
-    await _delay();
-    const idx = _db.users.findIndex(u => u.id === id);
-    if (idx === -1) throw new Error('Not found.');
-    if (_db.users[idx].role === 'sysadmin') throw new Error('Cannot delete system admin.');
-    const n = _db.users[idx].name;
-    _db.users.splice(idx, 1);
-    _log('User ' + n + ' deleted', 'warning'); _save(); return { message: 'Deleted.' };
+    const tok = localStorage.getItem('ib_token');
+    const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+    const res = await fetch('/api/admin/users/' + id, { method: 'DELETE', headers });
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || 'Failed to delete user.'); }
+    return await res.json();
   },
 
   createAdminUser: async (d) => {
-    await _delay();
-    if (_db.users.find(u => u.email === d.email)) throw new Error('Email already registered.');
-    _db.users.push({ id:_db._next.users++, name:d.name, email:d.email, password:d.password, role:d.role });
-    _log('Admin account created: ' + d.name + ' (' + d.role + ')', 'warning');
-    _save(); return { message: 'Admin created.' };
+    const tok = localStorage.getItem('ib_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    const res = await fetch('/api/admin/users/create-admin', { method: 'POST', headers, body: JSON.stringify(d) });
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || 'Failed to create admin.'); }
+    return await res.json();
   },
 
   getActivity: async (tokenParam) => {
@@ -734,15 +1002,15 @@ const api = {
   },
 
   updateProfile: async (d, t) => {
-    await _delay();
-    const u = _dec(t);
-    const user = _db.users.find(x => x.id === u.id);
-    if (!user) throw new Error('Not found.');
-    Object.assign(user, d);
-    _save();
-    const safe = Object.assign({}, user);
-    delete safe.password;
-    return safe;
+    // Accept either raw token or a string starting with 'Bearer '
+    let tok = t || localStorage.getItem('ib_token');
+    if (typeof tok === 'string' && tok.startsWith('Bearer ')) tok = tok.split(' ')[1];
+    if (!tok) throw new Error('Not logged in.');
+    const headers = { 'Content-Type': 'application/json' };
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    const res = await fetch('/api/profile', { method: 'PUT', headers, body: JSON.stringify(d) });
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || 'Failed to update profile.'); }
+    return await res.json();
   },
 
   getStudentDetails: async (sid) => {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>InternBridge — Riphah Faculty of Computing</title>
-  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
@@ -12,47 +12,52 @@
 
 <!-- ══ LOGIN PAGE ════════════════════════════════════════════ -->
 <div id="login-page">
-  <div class="auth-brand">
-    <div class="auth-logo">Intern<span>Bridge</span></div>
-    <div class="auth-tagline">Riphah International University · Faculty of Computing</div>
+  <div class="login-particles" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span>
   </div>
 
-  <div class="auth-card">
-    <div class="auth-card-header">
-      <h2>Welcome back</h2>
-      <p>Sign in to your account to continue</p>
-    </div>
-    <div class="role-grid">
-      <button class="role-btn active" data-role="student"    onclick="selectRole(this)">🎓 Student</button>
-      <button class="role-btn"        data-role="company"    onclick="selectRole(this)">🏢 Company</button>
-      <button class="role-btn"        data-role="university" onclick="selectRole(this)">🏫 University Admin</button>
-      <button class="role-btn"        data-role="sysadmin"   onclick="selectRole(this)">⚙️ System Admin</button>
-    </div>
-
-    <div class="form-group">
-      <label>Email Address</label>
-      <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email" />
-    </div>
-    <div class="form-group">
-      <label>Password</label>
-      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
-    </div>
-
-    <button class="btn btn-primary" id="login-btn" onclick="login()">Sign In →</button>
-
-    <div class="auth-divider" id="register-links">
-      <span>Don't have an account?</span>
-      <div class="auth-reg-links">
-        <a onclick="showRegisterPage('student')">Register as Student</a>
-        <span class="divider-dot">·</span>
-        <a onclick="showRegisterPage('company')">Register as Company</a>
+  <main class="login-shell">
+    <section class="login-intro" aria-label="About InternBridge">
+      <div class="login-intro-copy">
+        <h1>InternBridge</h1>
+        <p class="login-tagline">Where ambition meets opportunity.</p>
+        <p class="login-description">Your path from university to a meaningful internship, designed around the people and companies building tomorrow.</p>
+        <ul>
+          <li><span>01</span>Discover internships that fit your goals</li>
+          <li><span>02</span>Connect directly with trusted companies</li>
+          <li><span>03</span>Track every application in one place</li>
+        </ul>
       </div>
-    </div>
-  </div>
+      <p class="login-university">Riphah International University · Faculty of Computing</p>
+    </section>
 
-  <div class="auth-footer">
-    <span>© 2025 Riphah International University · InternBridge</span>
-  </div>
+    <section class="login-panel">
+      <div class="auth-card">
+        <div class="auth-card-header">
+          <h2>Welcome back</h2>
+          <p>Sign in to continue to InternBridge</p>
+        </div>
+
+        <form onsubmit="event.preventDefault(); doLogin();">
+          <div class="form-group">
+            <label for="login-email">Email address</label>
+            <input type="email" id="login-email" name="email" placeholder="name@example.com" autocomplete="email" required />
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" name="password" placeholder="Enter your password" autocomplete="current-password" required />
+          </div>
+          <button class="btn btn-primary" id="login-btn" type="submit">Login</button>
+        </form>
+
+        <div class="auth-divider">
+          <span>New to InternBridge?</span>
+          <a href="#register" onclick="showRegisterPage(); return false;">Create an account</a>
+        </div>
+      </div>
+    </section>
+  </main>
 </div>
 
 <!-- ══ REGISTER PAGE ═════════════════════════════════════════ -->
@@ -68,12 +73,19 @@
       <p>Fill in your details to get started</p>
     </div>
 
+    <div class="register-role-field">
+      <label for="register-role">I am registering as</label>
+      <select id="register-role" onchange="showRegisterScreen(this.value)">
+        <option value="student">Student</option>
+        <option value="company">Company</option>
+      </select>
+    </div>
     <div class="tab-bar" id="register-type-tabs"></div>
     <div id="register-form-container"></div>
 
     <div class="auth-divider">
       <span>Already have an account?</span>
-      <a onclick="showLoginPage()">Sign in →</a>
+      <a href="#login" onclick="showLoginPage(); return false;">Sign in</a>
     </div>
   </div>
 
@@ -87,6 +99,13 @@
   <nav id="navbar">
     <div class="nav-logo">Intern<span>Bridge</span></div>
     <div class="nav-right">
+      <div id="notif-wrapper" style="position:relative;margin-right:12px">
+        <button id="notif-btn" class="btn-ghost" style="position:relative;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--surface);border:1px solid var(--border);cursor:pointer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6 6 0 1 0-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="notif-badge" style="background:var(--red);color:#fff;border-radius:10px;padding:2px 6px;font-size:12px;display:none;position:relative;top:-2px">0</span>
+        </button>
+        <div id="notif-dropdown" style="display:none;position:absolute;right:0;top:44px;width:320px;max-height:420px;overflow:auto;background:var(--surface);border:1px solid var(--border);box-shadow:0 6px 18px rgba(0,0,0,0.08);border-radius:8px;z-index:60"></div>
+      </div>
       <div class="nav-user-info">
         <span class="nav-user" id="nav-username"></span>
         <span class="role-tag" id="nav-role"></span>
