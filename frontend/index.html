@@ -97,7 +97,12 @@
 <!-- ══ MAIN APP ═══════════════════════════════════════════════ -->
 <div id="app">
   <nav id="navbar">
-    <div class="nav-logo">Intern<span>Bridge</span></div>
+    <div class="nav-left">
+      <button id="app-back-btn" class="app-back-btn" type="button" aria-label="Go back" title="Go back" onclick="goBackPage()" disabled>
+        <span aria-hidden="true">←</span>
+      </button>
+      <div class="nav-logo">Intern<span>Bridge</span></div>
+    </div>
     <div class="nav-right">
       <div id="notif-wrapper" style="position:relative;margin-right:12px">
         <button id="notif-btn" class="btn-ghost" style="position:relative;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--surface);border:1px solid var(--border);cursor:pointer">

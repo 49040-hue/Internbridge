@@ -135,6 +135,18 @@ function getPageInit(pageId) {
 }  
 
 let currentPage = null;
+let appPageHistory = [];
+let appHistoryReady = false;
+
+function updateBackButton() {
+  const button = document.getElementById('app-back-btn');
+  if (button) button.disabled = appPageHistory.length === 0;
+}
+
+function goBackPage() {
+  if (!appPageHistory.length) return;
+  history.back();
+}
 
 function showPageSpinner(pageEl) {
   pageEl.innerHTML = `<div style="display:flex;justify-content:center;padding:80px"><div class="spinner"></div></div>`;
@@ -150,9 +162,14 @@ function showPageError(pageEl, msg) {
     </div>`;
 }
 
-async function navigateTo(pageId) {
+async function navigateTo(pageId, options = {}) {
   // assign early so errors inside init or showPageError have a valid value
+  if (options.addHistory !== false && pageId !== currentPage) {
+    appPageHistory.push(currentPage);
+    history.pushState({ internBridgePage: pageId }, '', `#${pageId}`);
+  }
   currentPage = pageId;
+  updateBackButton();
 
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -230,7 +247,19 @@ function initApp() {
   document.getElementById('app').classList.add('visible');
 
   const defaults = { student:'dashboard', company:'company-dashboard', university:'uni-dashboard', sysadmin:'sys-dashboard' };
-  navigateTo(defaults[role] || 'dashboard');
+  const defaultPage = defaults[role] || 'dashboard';
+  appPageHistory = [];
+  appHistoryReady = true;
+  history.replaceState({ internBridgePage: defaultPage }, '', `#${defaultPage}`);
+  navigateTo(defaultPage, { addHistory: false });
+
+  window.addEventListener('popstate', event => {
+    const pageId = event.state && event.state.internBridgePage;
+    if (!appHistoryReady || !pageId) return;
+    appPageHistory.pop();
+    updateBackButton();
+    navigateTo(pageId, { addHistory: false });
+  });
   setTimeout(updateSidebarBadges, 600);
   setInterval(updateSidebarBadges, 30000);
   // Notifications: initial load and polling

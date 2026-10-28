@@ -457,6 +457,35 @@ select:focus {
   font-size: 12px;
 }
 
+ .nav-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-back-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.app-back-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.app-back-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 @media (max-width: 860px) {
   #login-page {
     justify-content: flex-start;
