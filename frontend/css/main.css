@@ -451,12 +451,84 @@ tr:hover td { background: var(--bg); }
 
 /* ── RESPONSIVE ──────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  #sidebar { display: none; }
-  #main { padding: 16px; }
+  #content { flex-direction: column; min-width: 0; }
+  #sidebar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    height: auto;
+    max-height: 64px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: sticky;
+    top: 60px;
+    z-index: 90;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  #sidebar .sidebar-section { display: none; }
+  #sidebar .nav-item {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  #main {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    padding: 16px;
+    overflow-x: hidden;
+  }
   .form-row, .form-row-3 { grid-template-columns: 1fr; }
   .stat-grid { gap: 10px; }
+  .stat-card { flex: 1 1 calc(50% - 5px); min-width: 0; }
   .internship-card { flex-direction: column; align-items: flex-start; }
-  #navbar { padding: 0 16px; }
+  .page-header { gap: 12px; }
+  .card { padding: 16px; }
+  #page-uni-profile .card > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #navbar {
+    height: 56px;
+    min-height: 56px;
+    padding: 0 10px;
+    gap: 8px;
+  }
+  #sidebar { top: 56px; }
+  .nav-right { gap: 6px; }
+  #notif-wrapper { margin-right: 0 !important; }
+  #notif-dropdown { max-width: calc(100vw - 20px); }
+  .nav-user-info { min-width: 0; }
+  .nav-user {
+    display: block;
+    max-width: 76px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .role-tag { display: none; }
+  #navbar .btn-logout {
+    gap: 0;
+    padding: 7px;
+    font-size: 0;
+  }
+  #main { padding: 12px; }
+  .page-header { flex-direction: column; }
+  .page-title { font-size: 18px; }
+  .stat-card { padding: 14px; }
+  .stat-num { font-size: 23px; }
+  .detail-row { flex-direction: column; gap: 3px; }
+  .detail-label { width: auto; }
+}
+
+@media (max-width: 360px) {
+  .nav-user-info { display: none; }
 }
 
 /* Extra badge states */
