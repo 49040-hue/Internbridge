@@ -23,6 +23,12 @@ function makeToken(user) {
   );
 }
 
+function logDemoEmailFailure(recipient, secretLabel, secret) {
+  if (process.env.DEBUG_OTP_LOG !== 'true') return;
+  // Demo-only diagnostic; remove this logging or leave the flag off in real use.
+  console.log(`[demo] Email delivery failed for ${recipient}; ${secretLabel}: ${secret}`);
+}
+
 // POST /api/auth/login
 router.post('/login', loginLimiter, async (req, res) => {
   const email = (req.body && req.body.email) ? String(req.body.email).trim().toLowerCase() : '';
@@ -155,6 +161,7 @@ router.post('/register/student', async (req, res) => {
             return res.status(200).json({ message: 'A verification email has already been sent. We resent a new OTP to your email.' });
           } else {
             console.error('Failed to resend OTP during re-register:', mailRes && mailRes.error);
+            logDemoEmailFailure(existing.email, 'OTP', otp);
             return res.status(500).json({ error: 'Account exists and verification email resend failed. Please contact support.' });
           }
         } catch (e) {
@@ -235,6 +242,7 @@ router.post('/register/student', async (req, res) => {
     if (!mailRes || !mailRes.ok) {
       console.error('Failed to send OTP email:', mailRes && mailRes.error);
       console.warn(`New student registered (email unverified, email send failed): ${name}`);
+      logDemoEmailFailure(email, 'OTP', otp);
       return res.status(201).json({
         message: 'Account created, but the verification email could not be sent. Check the email server configuration, then use Resend OTP.',
         emailSent: false
@@ -322,6 +330,7 @@ router.post('/register/company', async (req, res) => {
               return res.status(200).json({ message: 'A verification email has already been sent. We resent a new OTP to your email.' });
             } else {
               console.error('Failed to resend OTP during re-register (company):', mailRes && mailRes.error);
+              logDemoEmailFailure(existing.email, 'OTP', otp);
               return res.status(500).json({ error: 'Account exists and verification email resend failed. Please contact support.' });
             }
           } catch (e) {
@@ -416,6 +425,7 @@ router.post('/register/company', async (req, res) => {
     if (!mailRes || !mailRes.ok) {
       console.error('Failed to send OTP email for company registration:', mailRes && mailRes.error);
       console.warn(`New company registered (email unverified, email send failed): ${name}`);
+      logDemoEmailFailure(email, 'OTP', otp);
       return res.status(201).json({
         message: 'Company account created, but the verification email could not be sent. Check the email server configuration, then use Resend OTP.',
         emailSent: false
@@ -500,7 +510,7 @@ router.post('/forgot-password', async (req, res) => {
       return res.json({ message: 'If an account exists, a password reset link has been sent to the email address.' });
     } else {
       console.error('Failed to send reset email:', result.error);
-      console.log(`Password reset link for ${user.email}: ${resetLink}`);
+      logDemoEmailFailure(user.email, 'password reset link', resetLink);
       return res.status(500).json({ error: 'Failed to send password reset email. Please try again later.' });
     }
   } catch (err) {
@@ -644,6 +654,7 @@ router.post('/resend-otp', resendLimiter, async (req, res) => {
       return res.json({ message: 'A verification email has already been sent. We resent a new OTP to your email.' });
     } else {
       console.error('Failed to resend OTP email:', result && result.error);
+      logDemoEmailFailure(user.email, 'OTP', otp);
       return res.status(500).json({ error: 'Failed to send OTP email. Please try again later.' });
     }
   } catch (err) {

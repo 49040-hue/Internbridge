@@ -38,9 +38,57 @@ function getBrevoSender(from) {
   return { name, email };
 }
 
+async function diagnoseBrevo() {
+  try {
+    const headers = { 'api-key': process.env.BREVO_API_KEY };
+    const accountResponse = await fetch('https://api.brevo.com/v3/account', { headers });
+    const accountBody = await accountResponse.text();
+    if (accountResponse.status === 401) {
+      console.error('❌ BREVO_API_KEY is invalid or has extra spaces - generate a new key in Brevo > SMTP & API');
+    } else if (accountResponse.ok) {
+      console.log('✅ Brevo API key is valid');
+    } else {
+      console.error(`❌ Brevo account diagnostic failed (HTTP ${accountResponse.status}): ${accountBody}`);
+    }
+
+    const senderEmail = (process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_USER || '').trim();
+    const sendersResponse = await fetch('https://api.brevo.com/v3/senders', { headers });
+    const sendersBody = await sendersResponse.text();
+    if (!sendersResponse.ok) {
+      console.error(`❌ Brevo sender diagnostic failed (HTTP ${sendersResponse.status}): ${sendersBody}`);
+      return;
+    }
+
+    let sendersData;
+    try {
+      sendersData = sendersBody ? JSON.parse(sendersBody) : {};
+    } catch (err) {
+      console.error('❌ Could not parse Brevo sender diagnostic response:', err);
+      return;
+    }
+    const senders = Array.isArray(sendersData.senders) ? sendersData.senders : [];
+    const sender = senders.find(item =>
+      typeof item.email === 'string' && item.email.toLowerCase() === senderEmail.toLowerCase()
+    );
+    if (sender && sender.active) {
+      console.log(`✅ Sender ${senderEmail} is active in Brevo`);
+    } else if (sender) {
+      console.error(`❌ Sender ${senderEmail} is NOT active/verified in Brevo. Add it in Brevo > Senders, Domains & Dedicated IPs > Senders and enter the 6-digit code sent to that email.`);
+    } else {
+      const existingSenders = senders.map(item => item.email).filter(Boolean).join(', ');
+      console.error(`❌ Sender ${senderEmail} not found. Existing senders: ${existingSenders}`);
+    }
+  } catch (err) {
+    console.error('❌ Brevo startup diagnostic failed:', err && err.message || err);
+  }
+}
+
 async function init() {
   if (process.env.BREVO_API_KEY) {
     console.log('✅ Brevo transactional HTTPS API will be used for outgoing email');
+    void diagnoseBrevo().catch(err => {
+      console.error('❌ Brevo startup diagnostic failed:', err && err.message || err);
+    });
     return;
   }
 
@@ -107,6 +155,19 @@ async function sendMail(mailOptions, { retries = 2 } = {}) {
           error.statusCode = response.status;
           error.response = responseBody;
           console.error('Brevo email API request failed:', error.message);
+          const responseMessage = String((info && info.message) || responseBody || '');
+          const lowerMessage = responseMessage.toLowerCase();
+          let hint = '';
+          if (response.status === 401) {
+            hint = 'Brevo API key is wrong.';
+          } else if (response.status === 400 && lowerMessage.includes('sender')) {
+            hint = 'Sender email is not verified in Brevo.';
+          } else if (response.status === 403 || lowerMessage.includes('not yet activated') || lowerMessage.includes('permission_denied')) {
+            hint = 'Brevo transactional sending is not activated for this account. Contact Brevo support to activate transactional emails.';
+          } else if (response.status === 402 || response.status === 429) {
+            hint = 'Brevo credit or rate limit reached.';
+          }
+          if (hint) console.error(`Brevo hint: ${hint}`);
           throw error;
         }
       } else {
