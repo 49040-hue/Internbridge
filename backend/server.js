@@ -175,6 +175,13 @@ app.use((err, req, res, next) => {
 });
 
 async function startServer() {
+  try {
+    await db.execute('SELECT 1');
+    console.log('✅ DB connected (TLS)');
+  } catch (err) {
+    console.error('❌ DB connection failed:', err);
+  }
+
   await ensureStartupSchema();
   try {
     await seedDevelopmentAccounts();
