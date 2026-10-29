@@ -10,49 +10,81 @@ try {
   console.error('Ensure you have installed dependencies: run `npm install dotenv mysql2` in the project root.\n');
   process.exit(1);
 }
-// Ensure password_resets table exists on startup
-(async () => {
+async function ensureColumn(table, column, definition) {
+  const [rows] = await db.execute(
+    'SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+    [table, column]
+  );
+  if (!rows.length) {
+    await db.execute(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+    console.log(`✅ ${table}.${column} column verified/added.`);
+  }
+}
+
+async function ensureStartupSchema() {
+  const userColumns = [
+    ['transcriptFileId', 'INT UNSIGNED NULL'],
+    ['cvFileId', 'INT UNSIGNED NULL'],
+    ['transcriptDoc', 'LONGTEXT NULL'],
+    ['rejectionReason', 'TEXT NULL'],
+    ['accountStatus', 'VARCHAR(32) NULL'],
+    ['failed_attempts', 'INT NOT NULL DEFAULT 0'],
+    ['locked_until', 'DATETIME NULL'],
+  ];
+
+  for (const [column, definition] of userColumns) {
+    try {
+      await ensureColumn('users', column, definition);
+    } catch (err) {
+      console.error(`❌ Error checking users.${column} column:`, err);
+    }
+  }
+
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS uploadedFiles (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      ownerId INT UNSIGNED NOT NULL,
+      fileName VARCHAR(255) NOT NULL,
+      fileType VARCHAR(128) NOT NULL,
+      base64 LONGTEXT NOT NULL,
+      uploadedAt VARCHAR(64) NOT NULL,
+      PRIMARY KEY (id),
+      KEY idx_uploaded_owner (ownerId),
+      CONSTRAINT fk_uploaded_owner FOREIGN KEY (ownerId) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    console.log('✅ uploadedFiles table verified/created.');
+  } catch (err) {
+    console.error('❌ Error creating uploadedFiles table:', err);
+  }
+
   try {
     await db.execute(`CREATE TABLE IF NOT EXISTS password_resets (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT,
-      token VARCHAR(128) UNIQUE,
-      expires_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id INT UNSIGNED NOT NULL,
+      token VARCHAR(128) NOT NULL UNIQUE,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME NOT NULL,
+      INDEX (user_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
     console.log('✅ password_resets table verified/created.');
   } catch (err) {
     console.error('❌ Error creating password_resets table:', err);
   }
-})();
 
-// Ensure users table has lockout columns
-(async () => {
   try {
-    await db.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INT DEFAULT 0");
-    await db.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until DATETIME DEFAULT NULL");
-    // Ensure uploadedFiles.base64 can store large files (LONGTEXT)
-    db.execute('ALTER TABLE uploadedFiles MODIFY COLUMN base64 LONGTEXT')
-      .then(() => console.log('✅ uploadedFiles base64 column ready'))
-      .catch(() => {});
-    // Ensure self_found_internships.offer_letter_doc can store long base64 payloads
-    db.execute('ALTER TABLE self_found_internships MODIFY COLUMN offer_letter_doc LONGTEXT')
-      .then(() => console.log('✅ self_found_internships.offer_letter_doc column adjusted'))
-      .catch(() => {});
-    console.log('✅ users table lockout columns verified/added.');
+    await ensureColumn('internships', 'override_reason', 'TEXT NULL');
   } catch (err) {
-    console.error('❌ Error adding lockout columns to users table:', err);
+    console.error('❌ Error checking internships.override_reason column:', err);
   }
-})();
-// Ensure internships table has override_reason column for admin override storage
-(async () => {
+
   try {
-    await db.execute("ALTER TABLE internships ADD COLUMN IF NOT EXISTS override_reason TEXT DEFAULT NULL");
-    console.log('✅ internships.override_reason column verified/added.');
+    await db.execute('ALTER TABLE self_found_internships MODIFY COLUMN offer_letter_doc LONGTEXT');
+    console.log('✅ self_found_internships.offer_letter_doc column adjusted');
   } catch (err) {
-    console.error('❌ Error adding override_reason column to internships table:', err);
+    console.error('❌ Error adjusting self_found_internships.offer_letter_doc:', err);
   }
-})();
+}
 // InternBridge v4 — Backend Server
 const express = require('express');
 const cors = require('cors');
@@ -90,7 +122,7 @@ app.use(cors({
     return callback(new Error('Origin not allowed'));
   }
 }));
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '32mb' }));
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 app.use('/api/auth',         require('./routes/auth'));
@@ -131,11 +163,19 @@ async function seedDevelopmentAccounts() {
 }
 
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error.' });
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request is too large. Uploaded documents must be 10 MB or smaller.' });
+  }
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Invalid request data.' });
+  }
+  console.error(err.stack || err);
+  res.status(err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500)
+    .json({ error: 'Internal server error.' });
 });
 
 async function startServer() {
+  await ensureStartupSchema();
   try {
     await seedDevelopmentAccounts();
   } catch (err) {

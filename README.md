@@ -41,6 +41,10 @@ credentials before starting the server. For Gmail, use a Google App Password
 private and never commit real credentials.
 Database TLS is disabled by default for local MySQL servers. Set `DB_SSL=true`
 when your database provider requires SSL/TLS.
+Render's free plan blocks outbound SMTP ports 25, 465, and 587. For deployed
+email delivery, set `BREVO_API_KEY` to a Brevo transactional API key; optionally
+set `BREVO_SENDER_EMAIL` to a verified Brevo sender address. When the Brevo key
+is present, email is sent over HTTPS; SMTP settings are used as a fallback.
 
 ```bash
 npm install
@@ -53,22 +57,15 @@ Server runs at: http://localhost:3000
 ## How to Run (Frontend Only)
 Just open `frontend/index.html` in browser — no server needed.
 Uses localStorage as database automatically.
-Email verification and OTP delivery require the backend and configured SMTP credentials.
+Email verification and OTP delivery require the backend and either Brevo API or SMTP configuration.
 
 If a verification code does not arrive, check the inbox spam folder and use **Resend OTP**.
-If sending still fails, confirm `EMAIL_USER` and `EMAIL_PASS` in the project-root `.env`
-and check the backend console for the SMTP error.
+If sending still fails, check the configured email provider variables and the backend logs.
 
 ---
 
-## Default Login Credentials
-
-| Role | Email | Password |
-|------|-------|----------|
-| University Admin | S@riphah.edu.pk | Salam123 |
-| System Admin | A@riphah.edu.pk | Salam321 |
-
-Student and Company accounts must be registered first, then approved by University Admin.
+Development demo accounts may be seeded when `NODE_ENV` is not `production`.
+Configure your own production accounts; default passwords are not documented here.
 
 ---
 

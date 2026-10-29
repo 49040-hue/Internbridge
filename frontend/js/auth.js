@@ -241,6 +241,10 @@ function previewUpload(input, previewId) {
 function readFileAsBase64(input) {
   return new Promise((res, rej) => {
     const f = input && input.files[0]; if (!f) { res(null); return; }
+    if (f.size > 10 * 1024 * 1024) {
+      rej(new Error('File is too large. Please upload a file 10 MB or smaller.'));
+      return;
+    }
     const r = new FileReader();
     r.onload  = e => res(e.target.result);
     r.onerror = () => rej(new Error('Failed to read file'));
