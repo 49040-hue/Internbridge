@@ -6,6 +6,8 @@ const { authMiddleware, requireRole } = require('../middleware/auth');
 const { sendMail } = require('../utils/email');
 const { createNotification } = require('./notifications');
 
+const parseJson = v => (typeof v === 'string' ? JSON.parse(v) : v);
+
 // ── UNIVERSITY ADMIN ──────────────────────────────────────────────────
 
 // GET /api/admin/stats
@@ -459,7 +461,7 @@ router.get('/criteria', async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT section, items FROM criteria');
     const obj = {};
-    for (const r of rows) obj[r.section] = JSON.parse(r.items || '[]');
+    for (const r of rows) obj[r.section] = parseJson(r.items || '[]');
     res.json(obj);
   } catch (err) {
     console.error('Get criteria error:', err);
@@ -477,7 +479,7 @@ router.put('/criteria/:section', authMiddleware, requireRole('university', 'sysa
     console.log(`Criteria updated: ${section} by ${req.user.name}`);
     const [updated] = await db.execute('SELECT section, items FROM criteria');
     const obj = {};
-    for (const r of updated) obj[r.section] = JSON.parse(r.items || '[]');
+    for (const r of updated) obj[r.section] = parseJson(r.items || '[]');
     res.json(obj);
   } catch (err) {
     console.error('Put criteria error:', err);
@@ -491,7 +493,7 @@ router.post('/criteria/:section/item', authMiddleware, requireRole('university',
   try {
     const [rows] = await db.execute('SELECT * FROM criteria WHERE section = ? LIMIT 1', [section]);
     if (!rows.length) return res.status(404).json({ error: 'Section not found.' });
-    const items = JSON.parse(rows[0].items || '[]');
+    const items = parseJson(rows[0].items || '[]');
     const id = Date.now();
     items.push({ id, text: req.body.text });
     await db.execute('UPDATE criteria SET items = ? WHERE section = ?', [JSON.stringify(items), section]);
@@ -509,7 +511,7 @@ router.delete('/criteria/:section/item/:id', authMiddleware, requireRole('univer
   try {
     const [rows] = await db.execute('SELECT * FROM criteria WHERE section = ? LIMIT 1', [section]);
     if (!rows.length) return res.status(404).json({ error: 'Section not found.' });
-    const items = JSON.parse(rows[0].items || '[]');
+    const items = parseJson(rows[0].items || '[]');
     const filtered = items.filter(x => x.id.toString() !== id.toString());
     await db.execute('UPDATE criteria SET items = ? WHERE section = ?', [JSON.stringify(filtered), section]);
     res.json({ message: 'Item deleted.' });
