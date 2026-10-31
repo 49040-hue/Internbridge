@@ -301,6 +301,12 @@ router.post('/complaints', authMiddleware, requireRole('company'), async (req, r
       const [appRows] = await db.execute('SELECT * FROM applications WHERE id = ? LIMIT 1', [applicationId]);
       const app = appRows[0];
       if (app) {
+        if (String(app.companyId) !== String(req.user.id)) {
+          return res.status(403).json({ error: 'This application does not belong to your company.' });
+        }
+        if (app.status !== 'student_confirmed' && app.status !== 'sysadmin_approved') {
+          return res.status(400).json({ error: 'Complaints can only be filed for confirmed applications.' });
+        }
         targetStudentId = app.studentId; targetStudentName = app.studentName; internshipTitle = app.internshipTitle;
       } else {
         return res.status(404).json({ error: 'Application not found.' });

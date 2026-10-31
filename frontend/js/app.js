@@ -5,6 +5,7 @@ function badge(status) {
   const label = {
     open:'Open', verified:'Verified', accepted:'Accepted',
     student_confirmed:'Confirmed', university_approved:'Uni Approved',
+    sysadmin_approved:'Approved',
     completed:'Completed', pending:'Pending', company_accepted:'Offer Received',
     rejected:'Rejected', closed:'Closed', student_declined:'Declined',
     company_rejected:'Not Selected', info:'Info', resolved:'Resolved', approved:'Approved',

@@ -1,6 +1,8 @@
 // @ts-nocheck
 // student.js — Student portal pages
 
+const isStudentActiveIntern = s => s === 'student_confirmed' || s === 'sysadmin_approved';
+
 function _isCompanyApproved(item) {
   if (!item) return false;
   return !!(
@@ -20,7 +22,7 @@ async function initStudentDashboard() {
     internships = (internships || []).filter(i => _isCompanyApproved(i));
     const offers   = applications.filter(a => a.status === 'company_accepted');
     const unread   = feedback.filter(f => !f.read).length;
-    const confirmed = applications.filter(a => a.status === 'student_confirmed' || a.status === 'university_approved');
+    const confirmed = applications.filter(a => isStudentActiveIntern(a.status));
 
     document.getElementById('page-dashboard').innerHTML = `
       <div class="page-header">

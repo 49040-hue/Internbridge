@@ -1,6 +1,7 @@
 // company.js — Company portal pages
 
 let _timeSlots = [];
+const isActiveIntern = s => s === 'student_confirmed' || s === 'sysadmin_approved';
 
 function _getToken() {
   try {
@@ -34,7 +35,7 @@ async function initCompanyDashboard() {
         <div class="stat-card"><div class="stat-num">${internships.length}</div><div class="stat-label">Posted Internships</div></div>
         <div class="stat-card gold"><div class="stat-num">${applications.filter(a=>a.status==='pending').length}</div><div class="stat-label">Pending Reviews</div></div>
         <div class="stat-card green"><div class="stat-num">${applications.filter(a=>a.status==='company_accepted').length}</div><div class="stat-label">Offers Extended</div></div>
-        <div class="stat-card muted"><div class="stat-num">${applications.filter(a=>a.status==='student_confirmed'||a.status==='university_approved').length}</div><div class="stat-label">Confirmed Interns</div></div>
+        <div class="stat-card muted"><div class="stat-num">${applications.filter(a=>isActiveIntern(a.status)).length}</div><div class="stat-label">Confirmed Interns</div></div>
       </div>
       <div class="card">
         <div class="card-title">Recent Applications</div>
@@ -288,7 +289,7 @@ async function initApplicants() {
                 ${a.status==='pending'?`
                   <button class="btn btn-success" onclick="openReviewModal(${a.id},'company_accepted')">Accept</button>
                   <button class="btn btn-danger"  onclick="reviewApplication(${a.id},'company_rejected','')">Reject</button>`:''}
-                ${(a.status==='student_confirmed'||a.status==='university_approved')?
+                ${isActiveIntern(a.status)?
                   `<button class="btn btn-warning btn-sm" onclick="navigateTo('file-complaint');window._complaintApp=${a.id}">File Complaint</button>`:''}
                 ${a.status==='company_accepted'||a.status==='company_rejected'?'<span style="font-size:12px;color:var(--muted)">Decision sent</span>':''}
               </div></td>
@@ -325,7 +326,7 @@ async function reviewApplication(id, status, feedback) {
 async function initFileComplaint() {
   try {
     const apps   = await api.getCompanyApplications(_companyAuth());
-    const active = apps.filter(a => a.status==='student_confirmed' || a.status==='university_approved');
+    const active = apps.filter(a => isActiveIntern(a.status));
     let html = '';
     html += '<div class="page-header"><div><div class="page-title">File Complaint</div>';
     html += '<div class="page-subtitle">Report issues with an intern to the Riphah university</div>';
