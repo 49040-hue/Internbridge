@@ -98,6 +98,7 @@ function _studentForm() { return `
   <div class="form-row">
     <div class="form-group"><label>Completed Credit Hours *</label><input id="r-credits" type="number" placeholder="e.g. 96" /></div>
   </div>
+  <div class="form-group"><label>Elective Course *</label><input id="r-elective" type="text" placeholder="e.g. Machine Learning" /></div>
   <div class="form-group"><label>Skills</label><input id="r-skills" type="text" placeholder="e.g. React, Python" /></div>
   <div class="form-group"><label>Email Address *</label><input id="r-email" type="email" placeholder="your@riphah.edu.pk" /></div>
   <div class="form-row">
@@ -256,9 +257,11 @@ function readFileAsBase64(input) {
 async function registerStudent() {
   const name=document.getElementById('r-name').value.trim();
   const email=document.getElementById('r-email').value.trim();
+  const electiveCourse=document.getElementById('r-elective').value.trim();
   const password=document.getElementById('r-pass').value;
   const pass2=document.getElementById('r-pass2').value;
   if (!name||!email||!password) return showToast('Name, email and password are required.','error');
+  if (!electiveCourse) return showToast('Elective course is required.','error');
   if (!validateEmail(email)) return showToast('Please enter a valid email address.','error');
   if (password!==pass2)         return showToast('Passwords do not match.','error');
   if (password.length<6)        return showToast('Password must be at least 6 characters.','error');
@@ -275,6 +278,7 @@ async function registerStudent() {
       semester:document.getElementById('r-semester').value,
       cgpa:document.getElementById('r-cgpa').value,
       creditHours:document.getElementById('r-credits').value,
+      electiveCourse,
       skills:document.getElementById('r-skills').value,
       transcriptDoc,
     });
