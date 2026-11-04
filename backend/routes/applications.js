@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { sendMail } = require('../utils/email');
+const { parseJson } = require('../utils/json');
 
 function fullStudentDetails(student) {
   const { password, ...safe } = student;
@@ -75,7 +76,7 @@ router.get('/mine', authMiddleware, requireRole('student'), async (req, res) => 
       const internship = internRows[0];
       const [companyRows] = internship ? await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [internship.companyId]) : [ [] ];
       const company = companyRows[0];
-      const timeSlots = internship && internship.timeSlots ? JSON.parse(internship.timeSlots) : [];
+      const timeSlots = internship ? parseJson(internship.timeSlots, []) : [];
       const availableSlots = timeSlots.filter(s => (s.bookedBy ? s.bookedBy.length : 0) < s.capacity).length;
       const slot = internship && a.slotId ? timeSlots.find(s => s.id === a.slotId) : null;
       enriched.push({
@@ -113,7 +114,7 @@ router.get('/company', authMiddleware, requireRole('company'), async (req, res) 
       const student = studentRows[0];
       const [internRows2] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [a.internshipId]);
       const internship = internRows2[0];
-      const timeSlots = internship && internship.timeSlots ? JSON.parse(internship.timeSlots) : [];
+      const timeSlots = internship ? parseJson(internship.timeSlots, []) : [];
       const slot = internship && a.slotId ? timeSlots.find(s => s.id === a.slotId) : null;
       result.push({
         ...a,

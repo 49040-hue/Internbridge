@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const { parseJson } = require('../utils/json');
 
 async function checkInternship(internship) {
   const issues = [];
@@ -284,7 +285,7 @@ router.post('/:id/slots', authMiddleware, requireRole('company'), async (req, re
     const { date, time, capacity, notes } = req.body;
     if (!date || !time) return res.status(400).json({ error: 'Date and time are required.' });
     const slot = { id: Date.now(), date, time, capacity: parseInt(capacity) || 1, notes: notes || '', bookedBy: [] };
-    const currentSlots = item.timeSlots ? JSON.parse(item.timeSlots) : [];
+    const currentSlots = parseJson(item.timeSlots, []);
     currentSlots.push(slot);
     await db.execute('UPDATE internships SET timeSlots = ? WHERE id = ?', [JSON.stringify(currentSlots), item.id]);
     console.log(`Time slot added to "${item.title}" by ${req.user.name}`);
@@ -301,7 +302,7 @@ router.delete('/:id/slots/:slotId', authMiddleware, requireRole('company'), asyn
     const [rows] = await db.execute('SELECT * FROM internships WHERE id = ? AND companyId = ? LIMIT 1', [parseInt(req.params.id), req.user.id]);
     const item = rows[0];
     if (!item) return res.status(404).json({ error: 'Internship not found.' });
-    const currentSlots = item.timeSlots ? JSON.parse(item.timeSlots) : [];
+    const currentSlots = parseJson(item.timeSlots, []);
     const filtered = currentSlots.filter(s => s.id !== parseInt(req.params.slotId));
     await db.execute('UPDATE internships SET timeSlots = ? WHERE id = ?', [JSON.stringify(filtered), item.id]);
     res.json({ message: 'Time slot removed.' });
@@ -317,7 +318,7 @@ router.post('/:id/slots/:slotId/book', authMiddleware, requireRole('student'), a
     const [rows] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [parseInt(req.params.id)]);
     const item = rows[0];
     if (!item) return res.status(404).json({ error: 'Internship not found.' });
-    const slots = item.timeSlots ? JSON.parse(item.timeSlots) : [];
+    const slots = parseJson(item.timeSlots, []);
     const slot = slots.find(s => s.id === parseInt(req.params.slotId));
     if (!slot) return res.status(404).json({ error: 'Time slot not found.' });
     if (slot.bookedBy && slot.bookedBy.includes(req.user.id)) return res.status(409).json({ error: 'You already booked this slot.' });
