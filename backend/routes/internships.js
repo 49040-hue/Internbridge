@@ -4,11 +4,16 @@ const db = require('../config/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { parseJson } = require('../utils/json');
 
-async function checkInternship(internship) {
+async function checkInternship(internship, companiesById) {
   const issues = [];
   try {
-    const [rows] = await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [internship.companyId]);
-    const c = rows[0];
+    let c;
+    if (companiesById) {
+      c = companiesById.get(internship.companyId);
+    } else {
+      const [rows] = await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [internship.companyId]);
+      c = rows[0];
+    }
     if (!c) return ['Company not found'];
     if (!c.pasha && !c.pseb && !c.secp) issues.push('Company not registered with P@SHA/PSEB/SECP');
     if (!c.cmmi) issues.push('Company must hold CMMI Level 2+ or ISO Certification');
@@ -69,12 +74,12 @@ router.get('/', async (req, res) => {
       params.push(parseInt(durationMax, 10) || 0);
     }
     const [rows] = await db.execute(sql, params);
-    const list = [];
-    for (const i of rows) {
-      const [countRows] = await db.execute('SELECT COUNT(*) as c FROM applications WHERE internshipId = ?', [i.id]);
-      const applicantsCount = countRows[0] ? countRows[0].c : 0;
-      list.push({ ...i, applicantsCount });
-    }
+    const internshipIds = rows.map(i => i.id);
+    const [countRows] = internshipIds.length
+      ? await db.execute(`SELECT internshipId, COUNT(*) AS c FROM applications WHERE internshipId IN (${internshipIds.map(() => '?').join(',')}) GROUP BY internshipId`, internshipIds)
+      : [[]];
+    const countsByInternshipId = new Map(countRows.map(row => [row.internshipId, row.c]));
+    const list = rows.map(i => ({ ...i, applicantsCount: countsByInternshipId.get(i.id) || 0 }));
     res.json(list);
   } catch (err) {
     console.error('List internships error:', err);
@@ -86,12 +91,12 @@ router.get('/', async (req, res) => {
 router.get('/company/mine', authMiddleware, requireRole('company'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM internships WHERE companyId = ?', [req.user.id]);
-    const list = [];
-    for (const i of rows) {
-      const [countRows] = await db.execute('SELECT COUNT(*) as c FROM applications WHERE internshipId = ?', [i.id]);
-      const applicantsCount = countRows[0] ? countRows[0].c : 0;
-      list.push({ ...i, applicantsCount });
-    }
+    const internshipIds = rows.map(i => i.id);
+    const [countRows] = internshipIds.length
+      ? await db.execute(`SELECT internshipId, COUNT(*) AS c FROM applications WHERE internshipId IN (${internshipIds.map(() => '?').join(',')}) GROUP BY internshipId`, internshipIds)
+      : [[]];
+    const countsByInternshipId = new Map(countRows.map(row => [row.internshipId, row.c]));
+    const list = rows.map(i => ({ ...i, applicantsCount: countsByInternshipId.get(i.id) || 0 }));
     res.json(list);
   } catch (err) {
     console.error('Company internships error:', err);
@@ -103,9 +108,14 @@ router.get('/company/mine', authMiddleware, requireRole('company'), async (req, 
 router.get('/pending-approval', authMiddleware, requireRole('sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM internships WHERE sysadminApproved = 0 AND status = ?', ['open']);
+    const companyIds = [...new Set(rows.map(i => i.companyId).filter(Boolean))];
+    const [companies] = companyIds.length
+      ? await db.execute(`SELECT id, pasha, pseb, secp, cmmi, operational FROM users WHERE id IN (${companyIds.map(() => '?').join(',')})`, companyIds)
+      : [[]];
+    const companiesById = new Map(companies.map(c => [c.id, c]));
     const pending = [];
     for (const i of rows) {
-      const criteriaIssues = await checkInternship(i);
+      const criteriaIssues = await checkInternship(i, companiesById);
       pending.push({ ...i, criteriaIssues });
     }
     res.json(pending);
@@ -119,11 +129,20 @@ router.get('/pending-approval', authMiddleware, requireRole('sysadmin'), async (
 router.get('/all', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM internships');
+    const internshipIds = rows.map(i => i.id);
+    const [countRows] = internshipIds.length
+      ? await db.execute(`SELECT internshipId, COUNT(*) AS c FROM applications WHERE internshipId IN (${internshipIds.map(() => '?').join(',')}) GROUP BY internshipId`, internshipIds)
+      : [[]];
+    const countsByInternshipId = new Map(countRows.map(row => [row.internshipId, row.c]));
+    const companyIds = [...new Set(rows.map(i => i.companyId).filter(Boolean))];
+    const [companies] = companyIds.length
+      ? await db.execute(`SELECT id, pasha, pseb, secp, cmmi, operational FROM users WHERE id IN (${companyIds.map(() => '?').join(',')})`, companyIds)
+      : [[]];
+    const companiesById = new Map(companies.map(c => [c.id, c]));
     const result = [];
     for (const i of rows) {
-      const [countRows] = await db.execute('SELECT COUNT(*) as c FROM applications WHERE internshipId = ?', [i.id]);
-      const applicantsCount = countRows[0] ? countRows[0].c : 0;
-      const criteriaIssues = await checkInternship(i);
+      const applicantsCount = countsByInternshipId.get(i.id) || 0;
+      const criteriaIssues = await checkInternship(i, companiesById);
       result.push({ ...i, applicantsCount, criteriaIssues });
     }
     res.json(result);

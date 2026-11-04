@@ -70,12 +70,20 @@ router.post('/', authMiddleware, requireRole('student'), async (req, res) => {
 router.get('/mine', authMiddleware, requireRole('student'), async (req, res) => {
   try {
     const [apps] = await db.execute('SELECT * FROM applications WHERE studentId = ?', [req.user.id]);
+    const internshipIds = [...new Set(apps.map(a => a.internshipId))];
+    const [internships] = internshipIds.length
+      ? await db.execute(`SELECT * FROM internships WHERE id IN (${internshipIds.map(() => '?').join(',')})`, internshipIds)
+      : [[]];
+    const internshipsById = new Map(internships.map(i => [i.id, i]));
+    const companyIds = [...new Set(internships.map(i => i.companyId).filter(Boolean))];
+    const [companies] = companyIds.length
+      ? await db.execute(`SELECT id, name, city, email, cmmi FROM users WHERE id IN (${companyIds.map(() => '?').join(',')})`, companyIds)
+      : [[]];
+    const companiesById = new Map(companies.map(c => [c.id, c]));
     const enriched = [];
     for (const a of apps) {
-      const [internRows] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [a.internshipId]);
-      const internship = internRows[0];
-      const [companyRows] = internship ? await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [internship.companyId]) : [ [] ];
-      const company = companyRows[0];
+      const internship = internshipsById.get(a.internshipId);
+      const company = internship ? companiesById.get(internship.companyId) : null;
       const timeSlots = internship ? parseJson(internship.timeSlots, []) : [];
       const availableSlots = timeSlots.filter(s => (s.bookedBy ? s.bookedBy.length : 0) < s.capacity).length;
       const slot = internship && a.slotId ? timeSlots.find(s => s.id === a.slotId) : null;
@@ -108,12 +116,20 @@ router.get('/company', authMiddleware, requireRole('company'), async (req, res) 
     const myIds = (internRows || []).map(r => r.id);
     if (!myIds.length) return res.json([]);
     const [apps] = await db.execute(`SELECT * FROM applications WHERE internshipId IN (${myIds.map(() => '?').join(',')})`, myIds);
+    const studentIds = [...new Set(apps.map(a => a.studentId))];
+    const [students] = studentIds.length
+      ? await db.execute(`SELECT id, name, email, university, cgpa, skills, transcriptFileId FROM users WHERE id IN (${studentIds.map(() => '?').join(',')})`, studentIds)
+      : [[]];
+    const studentsById = new Map(students.map(s => [s.id, s]));
+    const appInternshipIds = [...new Set(apps.map(a => a.internshipId))];
+    const [internships] = appInternshipIds.length
+      ? await db.execute(`SELECT * FROM internships WHERE id IN (${appInternshipIds.map(() => '?').join(',')})`, appInternshipIds)
+      : [[]];
+    const internshipsById = new Map(internships.map(i => [i.id, i]));
     const result = [];
     for (const a of apps) {
-      const [studentRows] = await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [a.studentId]);
-      const student = studentRows[0];
-      const [internRows2] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [a.internshipId]);
-      const internship = internRows2[0];
+      const student = studentsById.get(a.studentId);
+      const internship = internshipsById.get(a.internshipId);
       const timeSlots = internship ? parseJson(internship.timeSlots, []) : [];
       const slot = internship && a.slotId ? timeSlots.find(s => s.id === a.slotId) : null;
       result.push({
@@ -134,14 +150,26 @@ router.get('/company', authMiddleware, requireRole('company'), async (req, res) 
 router.get('/all', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [apps] = await db.execute('SELECT * FROM applications');
+    const studentIds = [...new Set(apps.map(a => a.studentId))];
+    const [students] = studentIds.length
+      ? await db.execute(`SELECT id, name, email, university, program, semester, cgpa, creditHours, electiveCourse, skills, accountStatus, status FROM users WHERE id IN (${studentIds.map(() => '?').join(',')})`, studentIds)
+      : [[]];
+    const studentsById = new Map(students.map(s => [s.id, s]));
+    const internshipIds = [...new Set(apps.map(a => a.internshipId))];
+    const [internships] = internshipIds.length
+      ? await db.execute(`SELECT * FROM internships WHERE id IN (${internshipIds.map(() => '?').join(',')})`, internshipIds)
+      : [[]];
+    const internshipsById = new Map(internships.map(i => [i.id, i]));
+    const companyIds = [...new Set(internships.map(i => i.companyId).filter(Boolean))];
+    const [companies] = companyIds.length
+      ? await db.execute(`SELECT id, name, email, city, status FROM users WHERE id IN (${companyIds.map(() => '?').join(',')})`, companyIds)
+      : [[]];
+    const companiesById = new Map(companies.map(c => [c.id, c]));
     const result = [];
     for (const a of apps) {
-      const [studentRows] = await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [a.studentId]);
-      const student = studentRows[0];
-      const [internRows] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [a.internshipId]);
-      const internship = internRows[0];
-      const [companyRows] = internship ? await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [internship.companyId]) : [ [] ];
-      const company = companyRows[0];
+      const student = studentsById.get(a.studentId);
+      const internship = internshipsById.get(a.internshipId);
+      const company = internship ? companiesById.get(internship.companyId) : null;
       result.push({
         ...a,
         studentDetails: student ? fullStudentDetails(student) : null,

@@ -126,13 +126,20 @@ router.patch('/students/:id', authMiddleware, requireRole('university', 'sysadmi
 // GET /api/admin/students — all students with details
 router.get('/students', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
-    const [studentsRows] = await db.execute("SELECT * FROM users WHERE role = 'student'");
-    const students = [];
-    for (const s of studentsRows) {
-      const { password, ...safe } = s;
-      const [apps] = await db.execute('SELECT * FROM applications WHERE studentId = ?', [s.id]);
-      students.push({ ...safe, applications: apps });
+    const [studentsRows] = await db.execute("SELECT id, name, email, role, university, program, semester, cgpa, creditHours, electiveCourse, skills, enrolled, status, accountStatus, COALESCE(accountStatus, status) AS verificationStatus, rejectionReason, registeredAt FROM users WHERE role = 'student'");
+    const studentIds = studentsRows.map(s => s.id);
+    const [apps] = studentIds.length
+      ? await db.execute(`SELECT * FROM applications WHERE studentId IN (${studentIds.map(() => '?').join(',')})`, studentIds)
+      : [[]];
+    const applicationsByStudentId = new Map();
+    for (const app of apps) {
+      if (!applicationsByStudentId.has(app.studentId)) applicationsByStudentId.set(app.studentId, []);
+      applicationsByStudentId.get(app.studentId).push(app);
     }
+    const students = studentsRows.map(s => {
+      const { password, ...safe } = s;
+      return { ...safe, applications: applicationsByStudentId.get(s.id) || [] };
+    });
     res.json(students);
   } catch (err) {
     console.error('Get students error:', err);
@@ -175,26 +182,35 @@ router.get('/students/:id', authMiddleware, requireRole('university', 'sysadmin'
 // GET /api/admin/companies
 router.get('/companies', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
-    const [companiesRows] = await db.execute("SELECT * FROM users WHERE role = 'company'");
-    const companies = [];
-    for (const c of companiesRows) {
-      const { password, ...safe } = c;
-      const [countRows] = await db.execute('SELECT COUNT(*) as c FROM internships WHERE companyId = ?', [c.id]);
-      // Attach registration/cmmi document URLs if uploadedFiles entries exist
+    const [companiesRows] = await db.execute("SELECT id, name, email, role, city, status, registeredAt, pasha, pseb, secp, cmmi, operational, rejectionReason FROM users WHERE role = 'company'");
+    const companyIds = companiesRows.map(c => c.id);
+    const [countRows] = companyIds.length
+      ? await db.execute(`SELECT companyId, COUNT(*) AS c FROM internships WHERE companyId IN (${companyIds.map(() => '?').join(',')}) GROUP BY companyId`, companyIds)
+      : [[]];
+    const countsByCompanyId = new Map(countRows.map(row => [row.companyId, row.c]));
+    let filesByCompanyId = new Map();
+    if (companyIds.length) {
       try {
-        const [files] = await db.execute('SELECT * FROM uploadedFiles WHERE ownerId = ?', [c.id]);
-        let regCertDoc = null;
-        let cmmiDoc = null;
-        for (const f of files) {
-          if (f.fileName && f.fileName.startsWith('reg-cert_')) regCertDoc = `/api/profile/file/${f.id}`;
-          if (f.fileName && f.fileName.startsWith('cmmi_cert_')) cmmiDoc = `/api/profile/file/${f.id}`;
+        const [files] = await db.execute(`SELECT id, ownerId, fileName FROM uploadedFiles WHERE ownerId IN (${companyIds.map(() => '?').join(',')})`, companyIds);
+        filesByCompanyId = new Map();
+        for (const file of files) {
+          if (!filesByCompanyId.has(file.ownerId)) filesByCompanyId.set(file.ownerId, []);
+          filesByCompanyId.get(file.ownerId).push(file);
         }
-        companies.push({ ...safe, internshipsCount: countRows[0].c, regCertDoc, cmmiDoc });
       } catch (e) {
-        console.error('Failed to fetch uploaded files for company', c.id, e);
-        companies.push({ ...safe, internshipsCount: countRows[0].c });
+        console.error('Failed to fetch uploaded files for companies:', e);
       }
     }
+    const companies = companiesRows.map(c => {
+      const { password, ...safe } = c;
+      let regCertDoc = null;
+      let cmmiDoc = null;
+      for (const file of filesByCompanyId.get(c.id) || []) {
+        if (file.fileName && file.fileName.startsWith('reg-cert_')) regCertDoc = `/api/profile/file/${file.id}`;
+        if (file.fileName && file.fileName.startsWith('cmmi_cert_')) cmmiDoc = `/api/profile/file/${file.id}`;
+      }
+      return { ...safe, internshipsCount: countsByCompanyId.get(c.id) || 0, regCertDoc, cmmiDoc };
+    });
     res.json(companies);
   } catch (err) {
     console.error('Get companies error:', err);
@@ -531,7 +547,7 @@ router.delete('/criteria/:section/item/:id', authMiddleware, requireRole('univer
 // GET /api/admin/users
 router.get('/users', authMiddleware, requireRole('sysadmin'), async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM users');
+    const [rows] = await db.execute('SELECT id, name, email, role, program, cgpa, creditHours, accountStatus, COALESCE(accountStatus, status) AS verificationStatus, pasha, pseb, secp, cmmi, status FROM users');
     const result = rows.map(u => {
       const { password, ...safe } = u;
       return safe;

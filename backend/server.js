@@ -88,6 +88,7 @@ async function ensureStartupSchema() {
 // InternBridge v4 — Backend Server
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const bcrypt = require('bcryptjs');
 
 const app = express();
@@ -122,7 +123,18 @@ app.use(cors({
     return callback(new Error('Origin not allowed'));
   }
 }));
+app.use(compression());
 app.use(express.json({ limit: '32mb' }));
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on('finish', () => {
+    const elapsed = Date.now() - startedAt;
+    if (elapsed > 500) console.log(`SLOW ${req.method} ${req.originalUrl} ${elapsed}ms`);
+  });
+  next();
+});
+
+app.get('/healthz', (req, res) => res.type('text/plain').send('ok'));
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 app.use('/api/auth',         require('./routes/auth'));

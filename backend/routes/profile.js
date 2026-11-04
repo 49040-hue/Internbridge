@@ -180,13 +180,18 @@ router.post('/free-time', authMiddleware, async (req, res) => {
     const freeTime = Array.isArray(req.body.freeTime) ? req.body.freeTime : [];
     // remove existing entries for this student
     await db.execute('DELETE FROM student_free_time WHERE student_id = ?', [req.user.id]);
-    // insert new slots
+    const values = [];
+    const params = [];
     for (const slot of freeTime) {
       const day = slot.day || slot.dayOfWeek || '';
       const start = slot.startTime || slot.start || slot.from || '';
       const end = slot.endTime || slot.end || slot.to || '';
       if (!day || !start || !end) continue;
-      await db.execute('INSERT INTO student_free_time (student_id, day, start_time, end_time) VALUES (?,?,?,?)', [req.user.id, day, start, end]);
+      values.push('(?,?,?,?)');
+      params.push(req.user.id, day, start, end);
+    }
+    if (values.length) {
+      await db.execute(`INSERT INTO student_free_time (student_id, day, start_time, end_time) VALUES ${values.join(',')}`, params);
     }
     res.json({ message: 'Saved.' });
   } catch (err) {
