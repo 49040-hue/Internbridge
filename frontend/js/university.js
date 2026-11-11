@@ -638,6 +638,8 @@ async function initSendFeedback() {
   try {
     const users    = await api.getStudentsList();
     const students = Array.isArray(users) ? users : (users.filter ? users.filter(u=> u.role === 'student' && u.accountStatus === 'verified') : []);
+    students.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
+      || String(a.email || '').localeCompare(String(b.email || ''), undefined, { sensitivity: 'base' }));
     document.getElementById('page-send-feedback').innerHTML = `
       <div class="page-header"><div>
         <div class="page-title">Send Feedback to Students</div>
@@ -645,9 +647,9 @@ async function initSendFeedback() {
       </div></div>
       <div class="card">
         <div class="form-group"><label>Select Student *</label>
+          <input id="sf-search" type="text" placeholder="Search by name or email..." style="margin-bottom:8px" />
           <select id="sf-student">
             <option value="">— Select student —</option>
-            ${students.map(s=>`<option value="${s.id}|${s.name}">${s.name} (${s.university||'Riphah'})</option>`).join('')}
           </select>
         </div>
         <div class="form-row">
@@ -663,6 +665,22 @@ async function initSendFeedback() {
         </div>
         <button class="btn btn-primary" onclick="sendFeedbackPage()">Send Feedback</button>
       </div>`;
+    const renderStudentOptions = (searchText = '', selectedValue = '') => {
+      const query = searchText.trim().toLowerCase();
+      const filteredStudents = students.filter(s => {
+        const name = String(s.name || '');
+        const email = String(s.email || '');
+        return !query || name.toLowerCase().includes(query) || email.toLowerCase().includes(query);
+      });
+      const studentSelect = document.getElementById('sf-student');
+      studentSelect.innerHTML = `<option value="">— Select student —</option>${filteredStudents.map(s=>`<option value="${s.id}|${s.name}">${s.name} — ${s.email || 'no email'}${s.program ? ' · ' + s.program : ''}${s.semester ? ' · Sem ' + s.semester : ''}</option>`).join('')}`;
+      if (filteredStudents.some(s => `${s.id}|${s.name}` === selectedValue)) studentSelect.value = selectedValue;
+    };
+    renderStudentOptions();
+    document.getElementById('sf-search').addEventListener('input', event => {
+      const selectedValue = document.getElementById('sf-student').value;
+      renderStudentOptions(event.target.value, selectedValue);
+    });
   } catch(e) { showPageError(document.getElementById('page-send-feedback'), e.message); }
 }
 

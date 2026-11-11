@@ -150,7 +150,7 @@ router.get('/students', authMiddleware, requireRole('university', 'sysadmin'), a
 // GET /api/admin/students-list — lightweight list of verified students for university dropdowns
 router.get('/students-list', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
-    const [rows] = await db.execute("SELECT id, name, email, university, accountStatus, role FROM users WHERE role = 'student' AND accountStatus = 'verified'");
+    const [rows] = await db.execute("SELECT id, name, email, university, program, semester, accountStatus, role FROM users WHERE role = 'student' AND accountStatus = 'verified'");
     res.json(rows);
   } catch (err) {
     console.error('Get students-list error:', err);
