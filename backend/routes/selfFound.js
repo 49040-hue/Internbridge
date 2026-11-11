@@ -11,6 +11,7 @@ function mapSelfFoundRow(r) {
     id: r.id,
     studentId: r.student_id,
     studentName: r.student_name,
+    studentEmail: r.student_email,
     companyName: r.company_name,
     companyWebsite: r.company_website,
     supervisorName: r.supervisor_name,
@@ -96,7 +97,7 @@ router.get('/mine', authMiddleware, async (req, res) => {
 // Returns all submissions with camelCase fields
 router.get('/', authMiddleware, requireRole('university','sysadmin'), async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM self_found_internships ORDER BY submitted_at DESC');
+    const [rows] = await db.execute('SELECT sf.*, u.email AS student_email FROM self_found_internships sf LEFT JOIN users u ON u.id = sf.student_id ORDER BY sf.submitted_at DESC');
     return res.json((rows || []).map(mapSelfFoundRow));
   } catch (err) {
     console.error('Get all self-found error:', err && err.stack || err);

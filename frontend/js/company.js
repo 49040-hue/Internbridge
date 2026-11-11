@@ -43,7 +43,7 @@ async function initCompanyDashboard() {
         `<div class="table-wrap"><table>
           <thead><tr><th>Student</th><th>Position</th><th>Date</th><th>Status</th></tr></thead>
           <tbody>${applications.slice(0,5).map(a=>`<tr>
-            <td><strong>${a.studentName}</strong></td>
+            <td><strong>${a.studentName}</strong><br><span style="font-size:12px;color:var(--muted)">${(a.studentDetails && a.studentDetails.email) || a.studentEmail || ''}</span></td>
             <td>${a.internshipTitle}</td>
             <td>${a.appliedAt}</td>
             <td>${badge(a.status)}</td>

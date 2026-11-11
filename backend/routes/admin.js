@@ -267,7 +267,7 @@ router.patch('/companies/:id', authMiddleware, requireRole('university', 'sysadm
 // GET /api/admin/complaints
 router.get('/complaints', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT * FROM complaints');
+    const [rows] = await db.execute('SELECT c.*, u.email AS studentEmail FROM complaints c LEFT JOIN users u ON u.id = c.studentId');
     res.json(rows);
   } catch (err) {
     console.error('Get complaints error:', err);

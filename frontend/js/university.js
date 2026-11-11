@@ -359,6 +359,7 @@ async function initSelfFoundReview() {
     const sfs = (sfsRaw || []).map(sf => ({
       id: sf.id || sf.id,
       studentName: sf.studentName || sf.student_name || sf.student_name || '—',
+      studentEmail: sf.studentEmail || sf.student_email || '',
       companyName: sf.companyName || sf.company_name || '—',
       companyWebsite: sf.companyWebsite || sf.company_website || '',
       supervisorName: sf.supervisorName || sf.supervisor_name || '—',
@@ -384,6 +385,7 @@ async function initSelfFoundReview() {
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
             <div>
               <div style="font-weight:700;font-size:15px">${sf.studentName}</div>
+              <div style="font-size:12px;color:var(--muted)">${sf.studentEmail}</div>
               <div style="font-size:12px;color:var(--muted)">Submitted: ${sf.submittedAt ? (new Date(sf.submittedAt).toLocaleDateString() || 'Invalid Date') : '—'}</div>
             </div>
             ${badge(sf.status)}
@@ -444,17 +446,24 @@ async function initAllApplications() {
       <div class="card"><div class="table-wrap"><table>
         <thead><tr><th>Student</th><th>Internship</th><th>Company</th><th>Applied</th><th>Status</th><th>University Approval</th><th>Action</th></tr></thead>
         <tbody>${!apps.length?`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:40px">No applications yet.</td></tr>`:
-          apps.map(a=>`<tr>
-            <td><a style="color:var(--teal);cursor:pointer;font-weight:600" onclick="viewStudentDetails(${a.studentId})">${a.studentName}</a></td>
+          apps.map(a=>{
+            const email = (a.studentDetails && a.studentDetails.email) || '';
+            const program = (a.studentDetails && a.studentDetails.program) || '';
+            const approved = !!a.sysadminApproved || a.status === 'sysadmin_approved';
+            return `<tr>
+            <td><a style="color:var(--teal);cursor:pointer;font-weight:600" onclick="viewStudentDetails(${a.studentId})">${a.studentName}</a>
+              <div style="font-size:12px;color:var(--muted)">${email}${program ? ' · ' + program : ''}</div>
+            </td>
             <td>${a.internshipTitle}</td>
             <td>${a.company}</td>
             <td>${a.appliedAt}</td>
             <td>${badge(a.status)}</td>
-            <td>${a.universityApproved?'<span class="text-green font-bold">✓ Approved</span>':'<span class="text-muted">—</span>'}</td>
-            <td>${a.status==='student_confirmed'&&!a.universityApproved?
+            <td>${approved?'<span class="text-green font-bold">✓ Approved</span>':'<span class="text-muted">—</span>'}</td>
+            <td>${a.status==='student_confirmed'&&!approved?
               `<button class="btn btn-success btn-sm" onclick="universityApprove(${a.id})">Final Approve</button>`:'—'}
             </td>
-          </tr>`).join('')}
+          </tr>`;
+          }).join('')}
         </tbody>
       </table></div></div>`;
   } catch(e) { showPageError(document.getElementById('page-all-applications'), e.message); }
@@ -606,7 +615,9 @@ async function initComplaints() {
             <div>
               <div style="font-weight:700;font-size:14px">${c.subject}</div>
               <div style="font-size:12px;color:var(--muted);margin-top:3px">
-                From: <strong>${c.fromName}</strong> about intern <strong>${c.studentName}</strong> — ${c.internshipTitle||''}
+                From: <strong>${c.fromName}</strong> about intern
+                <div><strong>${c.studentName}</strong><br><span style="font-size:12px;color:var(--muted)">${c.studentEmail || ''}</span></div>
+                ${c.internshipTitle||''}
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px">
