@@ -460,7 +460,7 @@ async function initStudentProfile() {
           <div class="form-group"><label>Program</label><input id="p-program" type="text" value="${profile.program||''}" /></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>CGPA</label><input id="p-cgpa" type="number" step="0.01" value="${profile.cgpa||''}" /></div>
+          <div class="form-group"><label>CGPA</label><input id="p-cgpa" type="number" min="0" max="4" step="0.01" value="${profile.cgpa||''}" /></div>
           <div class="form-group"><label>Credit Hours Completed</label><input id="p-credits" type="number" value="${profile.creditHours||''}" /></div>
         </div>
         <div class="form-row">
@@ -539,11 +539,19 @@ async function initStudentProfile() {
 
 async function saveStudentProfile() {
   try {
+    const cgpaValue = document.getElementById('p-cgpa').value;
+    const cgpa = Number(cgpaValue);
+    if (cgpaValue.trim() === '' || !Number.isFinite(cgpa) || cgpa < 0 || cgpa > 4)
+      return showToast('CGPA must be between 0 and 4.0.','error');
+    const creditHoursValue = document.getElementById('p-credits').value;
+    const creditHours = Number(creditHoursValue);
+    if (creditHoursValue.trim() !== '' && (!Number.isInteger(creditHours) || creditHours < 0))
+      return showToast('Credit hours must be 0 or greater.','error');
     await api.updateProfile({
       name:          document.getElementById('p-name').value,
       program:       document.getElementById('p-program').value,
-      cgpa:          parseFloat(document.getElementById('p-cgpa').value),
-      creditHours:   parseInt(document.getElementById('p-credits').value),
+      cgpa,
+      creditHours:   parseInt(creditHoursValue, 10),
       electiveCourse: document.getElementById('p-elective').value,
       skills:        document.getElementById('p-skills').value,
       enrolled:      document.getElementById('p-enrolled') ? (document.getElementById('p-enrolled').checked ? 1 : 0) : 0,

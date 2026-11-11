@@ -706,8 +706,11 @@ const api = {
   },
 
   getAllStudents: async () => {
-    await _delay();
-    return _db.users.filter(u => u.role === 'student').map(({ password, ...s }) => s);
+    const tok = await _getLatestToken();
+    const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+    const res = await fetch('/api/admin/students', { headers });
+    if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to fetch students.'); }
+    return await res.json();
   },
 
   verifyStudent: async (id, status, note) => {
@@ -895,13 +898,11 @@ const api = {
   },
 
   getSystemStats: async () => {
-    await _delay();
-    return {
-      totalUsers:_db.users.length, uptime:Math.floor(performance.now()/1000),
-      memoryMB:'N/A', nodeVersion:'Browser Mode',
-      dbRecords:_db.users.length + _db.internships.length + _db.applications.length,
-      lastBackup:'N/A', securityAlerts:_db.activityLog.filter(l => l.type === 'warning').length,
-    };
+    const tok = await _getLatestToken();
+    const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+    const res = await fetch('/api/admin/system-stats', { headers });
+    if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to fetch system stats.'); }
+    return await res.json();
   },
 
   getCriteria: async () => {
@@ -975,17 +976,11 @@ const api = {
   },
 
   getStudentDetails: async (sid) => {
-    await _delay();
-    const s = _db.users.find(u => u.id === sid);
-    if (!s) throw new Error('Not found.');
-    const safe = Object.assign({}, s);
-    delete safe.password;
-    return Object.assign({}, safe, {
-      applications: _db.applications.filter(a => a.studentId === sid),
-      feedback: _db.universityFeedback.filter(f => f.studentId === sid),
-      complaints: _db.complaints.filter(c => c.studentId === sid),
-      eligibilityIssues: _eligStudent(s),
-    });
+    const tok = await _getLatestToken();
+    const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+    const res = await fetch('/api/admin/students/' + encodeURIComponent(sid), { headers });
+    if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || body.message || 'Failed to fetch student details.'); }
+    return await res.json();
   },
 
   resetDatabase: () => {

@@ -568,12 +568,20 @@ async function initStudentDetails() {
         <div class="page-title">Student Details</div>
         <div class="page-subtitle">View all registered students and their information</div>
       </div></div>
-      ${!students.length?`<div class="empty-state card"><div class="icon">👤</div><p>No students registered.</p></div>`:''}
-      ${students.map(s=>{
+      <div class="form-group"><input id="sd-search" type="text" placeholder="Search by name or email..." /></div>
+      <div id="sd-results"></div>`;
+    const renderStudents = (searchText = '') => {
+      const query = searchText.trim().toLowerCase();
+      const filteredStudents = students.filter(s => String(s.name || '').toLowerCase().includes(query)
+        || String(s.email || '').toLowerCase().includes(query));
+      document.getElementById('sd-results').innerHTML = !filteredStudents.length
+        ? `<div class="empty-state card"><div class="icon">👤</div><p>${students.length ? 'No students match your search.' : 'No students registered.'}</p></div>`
+        : filteredStudents.map(s=>{
         const issues = [];
         if ((s.creditHours||0) < 60) issues.push('Credit hours below 60');
         if ((s.cgpa||0) < 2.0) issues.push('CGPA below 2.0');
         if (!s.electiveCourse) issues.push('No elective course');
+        const accountStatus = s.accountStatus === 'verified' ? 'verified' : s.accountStatus === 'rejected' ? 'rejected' : 'pending';
         return `<div class="card">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
             <div>
@@ -586,16 +594,20 @@ async function initStudentDetails() {
                 <span><strong>Skills:</strong> ${s.skills||'—'}</span>
               </div>
               <div style="margin-top:6px;font-size:12px">
-                <strong>Status:</strong> ${badge(s.verificationStatus||'pending')}
+                <strong>Status:</strong> ${badge(accountStatus)}
               </div>
-              ${s.verificationNote?`<div style="margin-top:6px;font-size:12px;color:var(--muted)">Note: ${s.verificationNote}</div>`:''}
+              <div style="margin-top:6px;font-size:12px;color:var(--muted)">Applications: ${s.applicationCount || 0}, confirmed: ${s.confirmedCount || 0}</div>
+              <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="viewStudentDetails(${s.id})">View details</button>
             </div>
             <div>
               ${issues.length ? issues.map(i => `<div class="chip-warn" style="margin-bottom:4px">⚠ ${i}</div>`).join('') : '<span class="chip-ok">✓ Eligible</span>'}
             </div>
           </div>
         </div>`;
-      }).join('')}`;
+      }).join('');
+    };
+    renderStudents();
+    document.getElementById('sd-search').addEventListener('input', event => renderStudents(event.target.value));
   } catch(e) { showPageError(document.getElementById('page-student-details'), e.message); }
 }
 

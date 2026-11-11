@@ -108,15 +108,21 @@ router.post('/register/student', async (req, res) => {
   const password = req.body && req.body.password ? String(req.body.password) : '';
   const program = req.body && req.body.program ? String(req.body.program).trim() : '';
   const semester = req.body && req.body.semester ? parseInt(req.body.semester, 10) : 0;
-  const cgpa = req.body && req.body.cgpa ? parseFloat(req.body.cgpa) : 0;
-  const creditHours = req.body && req.body.creditHours ? parseInt(req.body.creditHours, 10) : 0;
+  const cgpaValue = req.body && req.body.cgpa;
+  const creditHoursValue = req.body && req.body.creditHours;
+  const cgpa = cgpaValue !== undefined && cgpaValue !== null && String(cgpaValue).trim() !== '' ? Number(cgpaValue) : NaN;
+  const creditHours = creditHoursValue !== undefined && creditHoursValue !== null && String(creditHoursValue).trim() !== '' ? Number(creditHoursValue) : NaN;
   const electiveCourse = req.body && req.body.electiveCourse ? String(req.body.electiveCourse).trim() : '';
   
   const skills = req.body && req.body.skills ? String(req.body.skills).trim() : '';
   const transcriptFileId = req.body && req.body.transcriptFileId ? req.body.transcriptFileId : null;
 
-  if (!name || !email || !password || !program || !cgpa || !creditHours)
+  if (!name || !email || !password || !program || !Number.isFinite(cgpa) || !Number.isFinite(creditHours))
     return res.status(400).json({ error: 'All required fields must be filled in.' });
+  if (cgpa < 0 || cgpa > 4)
+    return res.status(400).json({ error: 'CGPA must be between 0 and 4.0.' });
+  if (!Number.isInteger(creditHours) || creditHours < 0)
+    return res.status(400).json({ error: 'Credit hours must be 0 or greater.' });
   // Relaxed password policy: require minimum length only (frontend gives better UX feedback)
   if (typeof password !== 'string' || password.length < 6)
     return res.status(400).json({ error: 'Password must be at least 6 characters.' });

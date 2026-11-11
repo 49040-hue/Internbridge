@@ -258,6 +258,8 @@ async function registerStudent() {
   const name=document.getElementById('r-name').value.trim();
   const email=document.getElementById('r-email').value.trim();
   const electiveCourse=document.getElementById('r-elective').value.trim();
+  const cgpaValue=document.getElementById('r-cgpa').value;
+  const creditHoursValue=document.getElementById('r-credits').value;
   const password=document.getElementById('r-pass').value;
   const pass2=document.getElementById('r-pass2').value;
   if (!name||!email||!password) return showToast('Name, email and password are required.','error');
@@ -265,6 +267,10 @@ async function registerStudent() {
   if (!validateEmail(email)) return showToast('Please enter a valid email address.','error');
   if (password!==pass2)         return showToast('Passwords do not match.','error');
   if (password.length<6)        return showToast('Password must be at least 6 characters.','error');
+  const cgpa=Number(cgpaValue);
+  if (cgpaValue.trim() !== '' && (!Number.isFinite(cgpa) || cgpa < 0 || cgpa > 4)) return showToast('CGPA must be between 0 and 4.0.','error');
+  const creditHours=Number(creditHoursValue);
+  if (creditHoursValue.trim() !== '' && (!Number.isInteger(creditHours) || creditHours < 0)) return showToast('Credit hours must be 0 or greater.','error');
   const btn=document.getElementById('reg-submit-btn');
   btn.disabled=true; btn.textContent='Creating account…';
   let transcriptDoc=null;

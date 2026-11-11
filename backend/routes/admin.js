@@ -126,20 +126,18 @@ router.patch('/students/:id', authMiddleware, requireRole('university', 'sysadmi
 // GET /api/admin/students — all students with details
 router.get('/students', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
-    const [studentsRows] = await db.execute("SELECT id, name, email, role, university, program, semester, cgpa, creditHours, electiveCourse, skills, enrolled, status, accountStatus, COALESCE(accountStatus, status) AS verificationStatus, rejectionReason, registeredAt FROM users WHERE role = 'student'");
-    const studentIds = studentsRows.map(s => s.id);
-    const [apps] = studentIds.length
-      ? await db.execute(`SELECT * FROM applications WHERE studentId IN (${studentIds.map(() => '?').join(',')})`, studentIds)
-      : [[]];
-    const applicationsByStudentId = new Map();
-    for (const app of apps) {
-      if (!applicationsByStudentId.has(app.studentId)) applicationsByStudentId.set(app.studentId, []);
-      applicationsByStudentId.get(app.studentId).push(app);
-    }
-    const students = studentsRows.map(s => {
-      const { password, ...safe } = s;
-      return { ...safe, applications: applicationsByStudentId.get(s.id) || [] };
-    });
+    const [studentsRows] = await db.execute("SELECT id, name, email, university, department, program, semester, cgpa, creditHours, electiveCourse, skills, enrolled, accountStatus, status, registeredAt FROM users WHERE role = 'student'");
+    const [applicationCounts] = await db.execute("SELECT studentId, COUNT(*) AS total, SUM(status IN ('student_confirmed','sysadmin_approved')) AS confirmed FROM applications GROUP BY studentId");
+    const countsByStudentId = new Map(applicationCounts.map(row => [row.studentId, row]));
+    const students = studentsRows.map(student => {
+      const counts = countsByStudentId.get(student.id);
+      return {
+        ...student,
+        applicationCount: Number(counts && counts.total) || 0,
+        confirmedCount: Number(counts && counts.confirmed) || 0,
+      };
+    }).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
+      || String(a.email || '').localeCompare(String(b.email || ''), undefined, { sensitivity: 'base' }));
     res.json(students);
   } catch (err) {
     console.error('Get students error:', err);
