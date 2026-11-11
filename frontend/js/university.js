@@ -27,8 +27,8 @@ async function initUniDashboard() {
         <div><strong>${stats.pendingApproval} internship post(s)</strong> awaiting Riphah approval.
           <a style="color:var(--teal);cursor:pointer;text-decoration:underline;margin-left:6px" onclick="navigateTo('approve-internships')">Approve →</a>
         </div></div>`:''}
-      ${stats.pendingSelfFound?`<div class="alert alert-info"><span class="alert-icon">📋</span>
-        <div><strong>${stats.pendingSelfFound} self-found internship(s)</strong> pending review.
+      ${(stats.pendingSelfFound ?? 0)?`<div class="alert alert-info"><span class="alert-icon">📋</span>
+        <div><strong>${stats.pendingSelfFound ?? 0} self-found internship(s)</strong> pending review.
           <a style="color:var(--teal);cursor:pointer;text-decoration:underline;margin-left:6px" onclick="navigateTo('self-found-review')">Review →</a>
         </div></div>`:''}
       <div class="stat-grid">
@@ -859,10 +859,10 @@ async function initReports() {
     document.getElementById('page-reports').innerHTML = `
       <div class="page-header"><div><div class="page-title">Reports & Analytics</div></div></div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-num">${stats.totalInternships}</div><div class="stat-label">Total Postings</div></div>
-        <div class="stat-card gold"><div class="stat-num">${stats.approvedStudents}</div><div class="stat-label">Verified Students</div></div>
-        <div class="stat-card green"><div class="stat-num">${stats.verifiedCompanies}</div><div class="stat-label">Verified Companies</div></div>
-        <div class="stat-card purple"><div class="stat-num">${stats.riphahApproved}</div><div class="stat-label">Riphah Approved Posts</div></div>
+        <div class="stat-card"><div class="stat-num">${stats.totalInternships ?? 0}</div><div class="stat-label">Total Postings</div></div>
+        <div class="stat-card gold"><div class="stat-num">${stats.verifiedStudents ?? 0}</div><div class="stat-label">Verified Students</div></div>
+        <div class="stat-card green"><div class="stat-num">${stats.verifiedCompanies ?? 0}</div><div class="stat-label">Verified Companies</div></div>
+        <div class="stat-card purple"><div class="stat-num">${stats.sysadminApproved ?? 0}</div><div class="stat-label">Riphah Approved Posts</div></div>
       </div>
       <div class="card">
         <div class="card-title">City Distribution</div>
@@ -876,12 +876,12 @@ async function initReports() {
       </div>
       <div class="card">
         <div class="card-title">Application Pipeline</div>
-        ${[['Pending',stats.pendingApplications,'var(--gold)'],['Confirmed',stats.confirmedApplications,'var(--green)']].map(([l,v,c])=>`
+        ${[['Pending',stats.pendingApplications ?? 0,'var(--gold)'],['Confirmed',stats.confirmedApplications ?? 0,'var(--green)']].map(([l,v,c])=>`
           <div style="margin-bottom:14px">
             <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
               <span>${l}</span><span style="font-weight:700;color:${c}">${v}</span>
             </div>
-            <div class="progress-wrap"><div class="progress-bar" style="width:${stats.totalApplications?Math.round(v/stats.totalApplications*100):0}%;background:${c}"></div></div>
+            <div class="progress-wrap"><div class="progress-bar" style="width:${(stats.totalApplications ?? 0)?Math.round(v/(stats.totalApplications ?? 0)*100):0}%;background:${c}"></div></div>
           </div>`).join('')}
       </div>`;
   } catch(e) { showPageError(document.getElementById('page-reports'), e.message); }
