@@ -193,6 +193,7 @@ app.use((err, req, res, next) => {
     .json({ error: 'Internal server error.' });
 });
 
+// Process startup verifies database connectivity, runs schema checks and development seeding, starts the HTTP listener, and initializes email without a request caller.
 async function startServer() {
   try {
     await db.execute('SELECT 1');
