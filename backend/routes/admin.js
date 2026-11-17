@@ -410,6 +410,7 @@ router.post('/feedback', authMiddleware, requireRole('university', 'sysadmin'), 
 });
 
 // PATCH /api/admin/feedback/:id/read — mark feedback as read by student
+// Authenticated users can update feedback read using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/feedback/:id/read', authMiddleware, async (req, res) => {
   try {
     await db.execute('UPDATE universityFeedback SET `read` = 1 WHERE id = ? AND studentId = ?', [parseInt(req.params.id), req.user.id]);
