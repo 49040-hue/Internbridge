@@ -83,6 +83,7 @@ router.post('/submit', authMiddleware, async (req, res) => {
 
 // GET /api/self-found/mine
 // Returns the current student's submissions with camelCase fields
+// Authenticated users can read mine using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/mine', authMiddleware, async (req, res) => {
   try {
     const studentId = req.user && req.user.id;
