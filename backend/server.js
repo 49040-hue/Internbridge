@@ -10,6 +10,7 @@ try {
   console.error('Ensure you have installed dependencies: run `npm install dotenv mysql2` in the project root.\n');
   process.exit(1);
 }
+// Startup schema helper receives trusted table, column, and definition names, checks metadata, and adds a missing column so older installations can start with the expected shape.
 async function ensureColumn(table, column, definition) {
   const [rows] = await db.execute(
     'SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
