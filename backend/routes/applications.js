@@ -11,6 +11,7 @@ function fullStudentDetails(student) {
 }
 
 // POST /api/applications — student applies
+// Students can submit applications using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/', authMiddleware, requireRole('student'), async (req, res) => {
   const { internshipId } = req.body;
   if (!internshipId) return res.status(400).json({ error: 'Internship ID is required.' });
