@@ -30,6 +30,7 @@ function getEmailAddress(address) {
   return (match ? match[1] : value).trim();
 }
 
+// Brevo helper accepts an optional display-form sender and returns a normalized name/email object, applying configured sender precedence required by the provider API.
 function getBrevoSender(from) {
   const value = String(from || '').trim();
   const match = value.match(/^\s*(.*?)\s*<\s*([^<>]+)\s*>\s*$/);
