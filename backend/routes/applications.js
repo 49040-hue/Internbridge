@@ -287,6 +287,7 @@ router.patch('/:id', authMiddleware, requireRole('company'), async (req, res) =>
 });
 
 // PATCH /api/applications/:id/student-decision — student confirms or declines offer
+// Students can update student decision using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/:id/student-decision', authMiddleware, requireRole('student'), async (req, res) => {
   const { decision } = req.body; // 'confirm' | 'decline'
   if (!['confirm', 'decline'].includes(decision)) return res.status(400).json({ error: 'Decision must be confirm or decline.' });
