@@ -30,6 +30,7 @@ async function checkInternship(internship, companiesById) {
 
 // GET /api/internships — public listing (only sysadmin-approved, from verified companies)
 // Supports optional filters: city, search (title/company), type, stipendMin, stipendMax, durationMin, durationMax
+// Public callers can read internships using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/', async (req, res) => {
   const { city, search, type, stipendMin, stipendMax, durationMin, durationMax } = req.query;
   try {
