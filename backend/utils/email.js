@@ -114,6 +114,7 @@ async function init() {
   }
 }
 
+// Internal mail service accepts message options and an optional retry count, sends through configured Brevo or SMTP, and returns an explicit result with bounded retries.
 async function sendMail(mailOptions, { retries = 2 } = {}) {
   const useBrevo = Boolean(process.env.BREVO_API_KEY);
   if (!useBrevo) {
