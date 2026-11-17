@@ -31,6 +31,7 @@ function logDemoEmailFailure(recipient, secretLabel, secret) {
 }
 
 // POST /api/auth/login
+// Public callers can submit login using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/login', loginLimiter, async (req, res) => {
   const email = (req.body && req.body.email) ? String(req.body.email).trim().toLowerCase() : '';
   const password = (req.body && req.body.password) ? String(req.body.password) : '';
