@@ -156,6 +156,7 @@ function openRejectStudentModal(id, name) {
     </div>`);
 }
 
+// The university review UI supplies a student id, decision, and optional note; this submits the decision and refreshes the queue so verification status stays visible.
 async function verifyStudentAction(id, status, note) {
   if (!note && status==='rejected') return showToast('Please provide a rejection reason.','error');
   try {
