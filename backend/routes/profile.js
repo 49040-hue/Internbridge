@@ -5,6 +5,7 @@ const { authMiddleware } = require('../middleware/auth');
 // free-time is now stored in MySQL table `student_free_time`
 
 // GET /api/profile
+// Authenticated users can read profile using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [req.user.id]);
