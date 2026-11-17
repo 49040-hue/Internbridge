@@ -110,6 +110,7 @@ function _dec(t) {
 }
 
 // Try to obtain the latest token from localStorage, with a short polling window
+// Shared API helpers call this without input; it polls browser storage and the in-memory auth value, returning the freshest token or null to bridge immediate post-login requests.
 async function _getLatestToken() {
   // quick poll for up to 500ms in case code calls API immediately after login
   for (let i = 0; i < 10; i++) {
