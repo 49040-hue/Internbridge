@@ -208,6 +208,7 @@ router.post('/free-time', authMiddleware, async (req, res) => {
 });
 
 // GET /api/profile/free-time — retrieve student's free time slots
+// Authenticated users can read free time using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/free-time', authMiddleware, async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT id, day, start_time AS startTime, end_time AS endTime FROM student_free_time WHERE student_id = ? ORDER BY id ASC', [req.user.id]);
