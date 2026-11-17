@@ -336,6 +336,7 @@ router.patch('/:id/student-decision', authMiddleware, requireRole('student'), as
 });
 
 // PATCH /api/applications/:id/sysadmin-approve — sysadmin or university gives final approval
+// System administrators and university reviewers can update sysadmin approve using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/:id/sysadmin-approve', authMiddleware, requireRole('sysadmin', 'university'), async (req, res) => {
   try {
     const [appRows] = await db.execute('SELECT * FROM applications WHERE id = ? LIMIT 1', [parseInt(req.params.id)]);
