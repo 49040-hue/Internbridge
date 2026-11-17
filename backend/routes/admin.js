@@ -547,6 +547,7 @@ router.post('/criteria/:section/item', authMiddleware, requireRole('university',
 });
 
 // DELETE /api/admin/criteria/:section/item/:id
+// University reviewers and system administrators can remove criteria item using path parameters identifying the target record; it returns a success result or a not-found/error response. The route keeps this destructive operation subject to its authorization and ownership checks.
 router.delete('/criteria/:section/item/:id', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   const { section, id } = req.params;
   try {
