@@ -154,6 +154,7 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '4.0', ti
 // Browser navigation to an unrecognized frontend path receives the SPA entry document; API routers are mounted first so this fallback does not replace them.
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/index.html')));
 
+// Non-production startup calls this helper with no request input; it ensures development records exist while the production guard prevents seeding in live deployments.
 async function seedDevelopmentAccounts() {
   if (process.env.NODE_ENV === 'production') return;
 
