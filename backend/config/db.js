@@ -8,6 +8,7 @@ try {
   throw err;
 }
 
+// Shared database pool reads connection settings from environment variables and centralizes bounded keep-alive connections for route queries.
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port: parseInt(process.env.DB_PORT || '4000', 10),
