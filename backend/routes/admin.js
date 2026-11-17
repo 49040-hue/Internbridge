@@ -316,6 +316,7 @@ router.patch('/complaints/:id', authMiddleware, requireRole('university', 'sysad
 
 // POST /api/admin/complaints — company files complaint
 // Require either applicationId OR studentId+studentName to create an actionable complaint
+// Companies can submit complaints using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/complaints', authMiddleware, requireRole('company'), async (req, res) => {
   const { applicationId, studentId, studentName, subject, description } = req.body;
   if (!subject || !description) return res.status(400).json({ error: 'Subject and description are required.' });
