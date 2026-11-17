@@ -295,6 +295,7 @@ router.get('/complaints/mine', authMiddleware, async (req, res) => {
 });
 
 // PATCH /api/admin/complaints/:id — respond to complaint
+// University reviewers and system administrators can update complaints using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/complaints/:id', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   const { response } = req.body;
   if (!response) return res.status(400).json({ error: 'Response is required.' });
