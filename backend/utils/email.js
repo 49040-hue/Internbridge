@@ -41,6 +41,7 @@ function getBrevoSender(from) {
   return { name, email };
 }
 
+// Startup diagnostic reads Brevo configuration, checks account and sender status, and reports provider readiness without returning credentials to callers.
 async function diagnoseBrevo() {
   try {
     const headers = { 'api-key': process.env.BREVO_API_KEY };
