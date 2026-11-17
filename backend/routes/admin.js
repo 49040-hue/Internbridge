@@ -271,6 +271,7 @@ router.patch('/companies/:id', authMiddleware, requireRole('university', 'sysadm
 });
 
 // GET /api/admin/complaints
+// University reviewers and system administrators can read complaints using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/complaints', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT c.*, u.email AS studentEmail FROM complaints c LEFT JOIN users u ON u.id = c.studentId');
