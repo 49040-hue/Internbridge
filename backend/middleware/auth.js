@@ -26,6 +26,7 @@ function authMiddleware(req, res, next) {
   }
 }
 
+// Route middleware factory accepts allowed role names and checks the authenticated request user, continuing on a match or returning 403 to restrict role-specific operations.
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!roles.includes(req.user.role))
