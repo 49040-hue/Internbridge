@@ -23,6 +23,7 @@ const transporter = nodemailer.createTransport({
 
 transporter.on('error', err => console.error('Email transporter error:', err));
 
+// Email helper accepts a raw or display-form recipient and returns the normalized address used by the provider API.
 function getEmailAddress(address) {
   const value = String(address || '').trim();
   const match = value.match(/<\s*([^<>]+)\s*>/);
