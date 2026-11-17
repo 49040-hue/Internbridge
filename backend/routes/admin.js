@@ -528,6 +528,7 @@ router.put('/criteria/:section', authMiddleware, requireRole('university', 'sysa
 });
 
 // POST /api/admin/criteria/:section/item
+// University reviewers and system administrators can submit criteria item using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/criteria/:section/item', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   const { section } = req.params;
   try {
