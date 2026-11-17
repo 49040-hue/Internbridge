@@ -461,6 +461,7 @@ router.get('/uni-profile', authMiddleware, requireRole('university'), async (req
 });
 
 // PUT /api/admin/uni-profile — update university admin profile fields
+// University reviewers can update uni profile using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.put('/uni-profile', authMiddleware, requireRole('university'), async (req, res) => {
   const { name, email, phone, address, website, description } = req.body;
   try {
