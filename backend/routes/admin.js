@@ -446,6 +446,7 @@ router.get('/activity', authMiddleware, requireRole('university', 'sysadmin'), a
 });
 
 // GET /api/admin/uni-profile — get current university admin profile
+// University reviewers can read uni profile using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/uni-profile', authMiddleware, requireRole('university'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM users WHERE id = ? AND role = ? LIMIT 1', [req.user.id, 'university']);
