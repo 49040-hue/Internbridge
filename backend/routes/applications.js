@@ -150,6 +150,7 @@ router.get('/company', authMiddleware, requireRole('company'), async (req, res) 
 });
 
 // GET /api/applications/all — university/sysadmin sees all with full details
+// University reviewers and system administrators can read all using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/all', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [apps] = await db.execute('SELECT * FROM applications');
