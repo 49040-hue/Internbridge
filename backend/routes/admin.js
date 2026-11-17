@@ -360,6 +360,7 @@ router.post('/complaints', authMiddleware, requireRole('company'), async (req, r
 });
 
 // GET /api/admin/feedback
+// University reviewers and system administrators can read feedback using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/feedback', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM universityFeedback');
