@@ -152,6 +152,7 @@ router.get('/file/:id', authMiddleware, async (req, res) => {
 });
 
 // GET /api/profile/file/:id/download — return raw file as attachment (for direct browser downloads)
+// Authenticated users can read file download using path parameters and any query filters supported by this endpoint; it returns the requested file or an access/not-found error. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/file/:id/download', authMiddleware, async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM uploadedFiles WHERE id = ? LIMIT 1', [parseInt(req.params.id)]);
