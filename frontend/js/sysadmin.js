@@ -17,6 +17,7 @@ async function initSysProfile() {
   }
 }
 
+// Sysadmin page navigation calls this without arguments; it fetches system and administrative counts and renders operational status for authorized administrators.
 async function initSysDashboard() {
   try {
     const [sysStats, stats] = await Promise.all([api.getSystemStats(), api.getAdminStats()]);
