@@ -619,6 +619,7 @@ router.post('/users/reset-password', authMiddleware, requireRole('sysadmin'), as
 });
 
 // POST /api/admin/users/create-admin
+// System administrators can submit users create admin using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/users/create-admin', authMiddleware, requireRole('sysadmin'), async (req, res) => {
   const { name, email, password, role, department } = req.body;
   if (!name || !email || !password || !role) return res.status(400).json({ error: 'All fields are required.' });
