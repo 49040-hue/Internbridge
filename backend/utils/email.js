@@ -87,6 +87,7 @@ async function diagnoseBrevo() {
   }
 }
 
+// Email subsystem startup selects Brevo or SMTP verification from environment configuration and logs setup failures before route handlers attempt delivery.
 async function init() {
   if (process.env.BREVO_API_KEY) {
     console.log('✅ Brevo transactional HTTPS API will be used for outgoing email');
