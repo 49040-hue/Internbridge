@@ -137,6 +137,7 @@ function _resolveToken(t) {
 }
 
 // Safely parse JSON responses; if parsing fails, include text for debugging
+// API callers pass a Fetch response and receive parsed JSON; when the body is not JSON, bounded response text is included in an error to keep server failures diagnosable.
 async function _parseOrText(res) {
   try {
     return await res.json();
