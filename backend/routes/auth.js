@@ -555,6 +555,7 @@ router.post('/reset-password', async (req, res) => {
 });
 
 // POST /api/auth/verify-otp
+// Public callers can submit verify otp using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/verify-otp', async (req, res) => {
   const email = req.body && req.body.email ? String(req.body.email).trim().toLowerCase() : '';
   const otp = req.body && req.body.otp ? String(req.body.otp).trim() : '';
