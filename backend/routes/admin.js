@@ -372,6 +372,7 @@ router.get('/feedback', authMiddleware, requireRole('university', 'sysadmin'), a
 });
 
 // POST /api/admin/feedback — send feedback to student
+// University reviewers and system administrators can submit feedback using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/feedback', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   const { studentId, studentName, subject, message, category } = req.body;
   if (!studentId || !subject || !message) return res.status(400).json({ error: 'Student, subject and message are required.' });
