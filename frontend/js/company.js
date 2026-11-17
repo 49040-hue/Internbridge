@@ -18,6 +18,7 @@ function _companyAuth() {
   return 'Bearer ' + t;
 }
 
+// Company page navigation calls this without arguments; it loads the company internships and applicants and renders offer and confirmed-placement counts.
 async function initCompanyDashboard() {
   try {
     const token = _companyAuth();
