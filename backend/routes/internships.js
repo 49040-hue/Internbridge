@@ -287,6 +287,7 @@ router.patch('/:id', authMiddleware, requireRole('company'), async (req, res) =>
 });
 
 // PATCH /api/internships/:id/reject — sysadmin/university rejects
+// System administrators and university reviewers can update reject using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/:id/reject', authMiddleware, requireRole('sysadmin', 'university'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [parseInt(req.params.id)]);
