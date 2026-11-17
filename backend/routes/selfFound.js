@@ -110,6 +110,7 @@ router.get('/', authMiddleware, requireRole('university','sysadmin'), async (req
 
 // PATCH /api/self-found/:id/review — approve/reject
 // Updates review status, notifies student, and returns the updated record in camelCase
+// University reviewers and system administrators can update review using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/:id/review', authMiddleware, requireRole('university','sysadmin'), async (req, res) => {
   const id = parseInt(req.params && req.params.id, 10);
   const { status, adminNote } = req.body || {};
