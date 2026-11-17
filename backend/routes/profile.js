@@ -91,6 +91,7 @@ router.get('/feedback', authMiddleware, async (req, res) => {
 });
 
 // POST /api/profile/upload
+// Authenticated users can submit upload using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/upload', authMiddleware, async (req, res) => {
   const { fileName, fileType, base64 } = req.body;
   if (!fileName || !fileType || !base64)
