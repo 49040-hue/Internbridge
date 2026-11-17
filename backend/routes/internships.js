@@ -157,6 +157,7 @@ router.get('/all', authMiddleware, requireRole('university', 'sysadmin'), async 
 });
 
 // GET /api/internships/:id
+// Public callers can read internships using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/:id', async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [parseInt(req.params.id)]);
