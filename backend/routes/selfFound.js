@@ -97,6 +97,7 @@ router.get('/mine', authMiddleware, async (req, res) => {
 
 // GET /api/self-found — university/sysadmin only
 // Returns all submissions with camelCase fields
+// University reviewers and system administrators can read self found using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/', authMiddleware, requireRole('university','sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT sf.*, u.email AS student_email FROM self_found_internships sf LEFT JOIN users u ON u.id = sf.student_id ORDER BY sf.submitted_at DESC');
