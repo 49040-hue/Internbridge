@@ -73,6 +73,7 @@ router.get('/students/pending', authMiddleware, requireRole('university', 'sysad
 });
 
 // PATCH /api/admin/students/:id — verify or reject student
+// University reviewers and system administrators can update students using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/students/:id', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   const { decision, reason } = req.body;
   if (!['approve', 'reject'].includes(decision))
