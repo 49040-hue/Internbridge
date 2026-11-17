@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET is not set in environment variables');
 
+// Express authentication middleware reads the Authorization header, verifies its JWT, and attaches the decoded identity to the request or returns 401 so protected handlers receive a trusted user.
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth) {
