@@ -224,6 +224,7 @@ router.get('/companies', authMiddleware, requireRole('university', 'sysadmin'), 
 });
 
 // PATCH /api/admin/companies/:id — verify or reject company
+// University reviewers and system administrators can update companies using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/companies/:id', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   const { status, reason } = req.body;
   if (!['verified', 'rejected'].includes(status))
