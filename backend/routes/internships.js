@@ -305,6 +305,7 @@ router.patch('/:id/reject', authMiddleware, requireRole('sysadmin', 'university'
 });
 
 // POST /api/internships/:id/slots — company adds time slots
+// Companies can submit slots using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/:id/slots', authMiddleware, requireRole('company'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM internships WHERE id = ? AND companyId = ? LIMIT 1', [parseInt(req.params.id), req.user.id]);
