@@ -127,6 +127,7 @@ router.patch('/students/:id', authMiddleware, requireRole('university', 'sysadmi
 });
 
 // GET /api/admin/students — all students with details
+// University reviewers and system administrators can read students using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/students', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [studentsRows] = await db.execute("SELECT id, name, email, university, department, program, semester, cgpa, creditHours, electiveCourse, skills, enrolled, accountStatus, status, registeredAt FROM users WHERE role = 'student'");
