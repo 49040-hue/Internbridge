@@ -599,6 +599,7 @@ router.delete('/users/:id', authMiddleware, requireRole('sysadmin'), async (req,
 });
 
 // POST /api/admin/users/reset-password
+// System administrators can submit users reset password using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/users/reset-password', authMiddleware, requireRole('sysadmin'), async (req, res) => {
   const { userId, newPassword } = req.body;
   if (!newPassword || newPassword.length < 6)
