@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 
+// Internal configuration check returns an Error naming missing email environment variables, or null when SMTP configuration is present, so callers can fail explicitly before sending.
 const missingEmailConfig = () => {
   const missing = ['EMAIL_USER', 'EMAIL_PASS'].filter(name => !process.env[name]);
   return missing.length
