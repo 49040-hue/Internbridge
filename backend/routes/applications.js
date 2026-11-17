@@ -68,6 +68,7 @@ router.post('/', authMiddleware, requireRole('student'), async (req, res) => {
 });
 
 // GET /api/applications/mine — student sees their applications with full details
+// Students can read mine using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/mine', authMiddleware, requireRole('student'), async (req, res) => {
   try {
     const [apps] = await db.execute('SELECT * FROM applications WHERE studentId = ?', [req.user.id]);
