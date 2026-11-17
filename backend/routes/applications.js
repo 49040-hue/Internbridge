@@ -189,6 +189,7 @@ router.get('/all', authMiddleware, requireRole('university', 'sysadmin'), async 
 });
 
 // PATCH /api/applications/:id — company accepts/rejects
+// Companies can update applications using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/:id', authMiddleware, requireRole('company'), async (req, res) => {
   const { status, feedback } = req.body;
   if (!['company_accepted', 'company_rejected'].includes(status))
