@@ -184,6 +184,7 @@ router.get('/students/:id', authMiddleware, requireRole('university', 'sysadmin'
 });
 
 // GET /api/admin/companies
+// University reviewers and system administrators can read companies using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/companies', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [companiesRows] = await db.execute("SELECT id, name, email, role, city, status, registeredAt, pasha, pseb, secp, cmmi, operational, rejectionReason FROM users WHERE role = 'company'");
