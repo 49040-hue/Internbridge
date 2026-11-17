@@ -180,6 +180,7 @@ async function seedDevelopmentAccounts() {
   }
 }
 
+// Express error boundary receives downstream errors and request/response objects; it returns client-error statuses for malformed or oversized bodies and a generic JSON response otherwise.
 app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ error: 'Request is too large. Uploaded documents must be 10 MB or smaller.' });
