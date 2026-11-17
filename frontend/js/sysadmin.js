@@ -122,6 +122,7 @@ function openCreateAdminModal() {
     </div>`);
 }
 
+// The sysadmin form supplies administrator details; this submits them through the API and reports the result while the server enforces role and validation rules.
 async function createAdminAccount() {
   const d = { name:document.getElementById('ca-name').value.trim(), email:document.getElementById('ca-email').value.trim(), password:document.getElementById('ca-pass').value, role:document.getElementById('ca-role').value };
   if (!d.name||!d.email||!d.password) return showToast('All fields are required.','error');
