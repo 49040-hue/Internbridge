@@ -181,6 +181,7 @@ router.get('/file/:id/download', authMiddleware, async (req, res) => {
 });
 
 // POST /api/profile/free-time — save student's free time slots (stored in backend/data/free-time.json)
+// Authenticated users can submit free time using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/free-time', authMiddleware, async (req, res) => {
   try {
     const freeTime = Array.isArray(req.body.freeTime) ? req.body.freeTime : [];
