@@ -495,6 +495,7 @@ router.put('/uni-profile', authMiddleware, requireRole('university'), async (req
 
 // ── CRITERIA ──────────────────────────────────────────────────────────
 // GET /api/admin/criteria
+// Public callers can read criteria using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/criteria', async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT section, items FROM criteria');
