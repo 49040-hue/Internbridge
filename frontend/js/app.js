@@ -163,6 +163,7 @@ function showPageError(pageEl, msg) {
     </div>`;
 }
 
+// Navigation callers provide a page identifier and optional history setting; this updates active UI/history, runs that page initializer, and renders a visible error if loading fails.
 async function navigateTo(pageId, options = {}) {
   // assign early so errors inside init or showPageError have a valid value
   if (options.addHistory !== false && pageId !== currentPage) {
