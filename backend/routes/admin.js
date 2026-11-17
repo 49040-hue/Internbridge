@@ -10,6 +10,7 @@ const { parseJson } = require('../utils/json');
 // ── UNIVERSITY ADMIN ──────────────────────────────────────────────────
 
 // GET /api/admin/stats
+// University reviewers and system administrators can read stats using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/stats', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [studentsTotal] = await db.execute("SELECT COUNT(*) as c FROM users WHERE role = 'student'");
