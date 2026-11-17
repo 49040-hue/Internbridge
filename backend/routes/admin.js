@@ -509,6 +509,7 @@ router.get('/criteria', async (req, res) => {
 });
 
 // PUT /api/admin/criteria/:section
+// University reviewers and system administrators can update criteria using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.put('/criteria/:section', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   const { section } = req.params;
   try {
