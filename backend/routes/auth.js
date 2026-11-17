@@ -530,6 +530,7 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // POST /api/auth/reset-password
+// Public callers can submit reset password using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/reset-password', async (req, res) => {
   const token = req.body && req.body.token ? String(req.body.token).trim() : '';
   const newPassword = req.body && req.body.newPassword ? String(req.body.newPassword) : '';
