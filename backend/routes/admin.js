@@ -657,6 +657,7 @@ router.patch('/users/:id/suspend', authMiddleware, requireRole('sysadmin'), asyn
 });
 
 // GET /api/admin/system-stats
+// System administrators can read system stats using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/system-stats', authMiddleware, requireRole('sysadmin'), async (req, res) => {
   try {
     const [usersCount] = await db.execute('SELECT COUNT(*) as c FROM users');
