@@ -31,6 +31,7 @@ function mapSelfFoundRow(r) {
 // POST /api/self-found/submit
 // Accepts student submission for a self-found internship. Allows startDate in the past (for testing),
 // but enforces a minimum duration of 8 weeks.
+// Authenticated users can submit submit using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/submit', authMiddleware, async (req, res) => {
   // Debug: log incoming payload to help trace missing fields
   try { console.log('POST /api/self-found/submit payload:', JSON.stringify(req.body && Object.keys(req.body).length ? req.body : {})); } catch (e) {}
