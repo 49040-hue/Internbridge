@@ -37,6 +37,7 @@ function redirectByRole(role) {
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────
+// The login form invokes this with values in page controls; it authenticates through the API, persists the returned session, redirects by role, and shows errors without leaving the button disabled.
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
