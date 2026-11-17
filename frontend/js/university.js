@@ -1,5 +1,6 @@
 // university.js — University portal
 
+// University page navigation calls this without arguments; it loads review statistics and outstanding complaints, then renders the university administrative overview.
 async function initUniDashboard() {
   try {
     const [stats, companies, complaints] = await Promise.all([api.getAdminStats(), api.getCompanies(), api.getComplaints()]);
