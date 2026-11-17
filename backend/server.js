@@ -136,6 +136,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Public load balancer callers receive plain-text `ok`; this lightweight liveness route avoids database work so process health can be checked independently.
 app.get('/healthz', (req, res) => res.type('text/plain').send('ok'));
 app.use(express.static(path.join(__dirname, '../frontend')));
 
