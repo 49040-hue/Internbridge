@@ -112,6 +112,7 @@ router.get('/mine', authMiddleware, requireRole('student'), async (req, res) => 
 });
 
 // GET /api/applications/company — company sees all applicants with full student details
+// Companies can read company using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/company', authMiddleware, requireRole('company'), async (req, res) => {
   try {
     const [internRows] = await db.execute('SELECT id FROM internships WHERE companyId = ?', [req.user.id]);
