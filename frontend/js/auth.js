@@ -255,6 +255,7 @@ function readFileAsBase64(input) {
 }
 
 // ── REGISTER STUDENT ──────────────────────────────────────────
+// Student registration submits form fields and selected documents through the API, then advances to verification feedback so applicants know the account is pending review.
 async function registerStudent() {
   const name=document.getElementById('r-name').value.trim();
   const email=document.getElementById('r-email').value.trim();
