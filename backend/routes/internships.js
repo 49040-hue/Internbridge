@@ -181,6 +181,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/internships — company posts
+// Companies can submit internships using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/', authMiddleware, requireRole('company'), async (req, res) => {
   try {
     const [companyRows] = await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [req.user.id]);
