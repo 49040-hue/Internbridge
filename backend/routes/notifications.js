@@ -15,6 +15,7 @@ async function createNotification(userId, title, message = '', type = 'info') {
 }
 
 // GET /api/notifications — list for logged-in user (newest first)
+// Authenticated users can read notifications using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM notifications WHERE userId = ? ORDER BY created_at DESC', [req.user.id]);
