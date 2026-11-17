@@ -582,6 +582,7 @@ router.get('/users', authMiddleware, requireRole('sysadmin'), async (req, res) =
 });
 
 // DELETE /api/admin/users/:id
+// System administrators can remove users using path parameters identifying the target record; it returns a success result or a not-found/error response. The route keeps this destructive operation subject to its authorization and ownership checks.
 router.delete('/users/:id', authMiddleware, requireRole('sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [parseInt(req.params.id)]);
