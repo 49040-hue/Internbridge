@@ -283,6 +283,7 @@ router.get('/complaints', authMiddleware, requireRole('university', 'sysadmin'),
 });
 
 // GET /api/admin/complaints/mine — student-facing complaints (only their own)
+// Authenticated users can read complaints mine using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/complaints/mine', authMiddleware, async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM complaints WHERE studentId = ? ORDER BY submittedAt DESC', [req.user.id]);
