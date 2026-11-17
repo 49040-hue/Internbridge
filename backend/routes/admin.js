@@ -434,6 +434,7 @@ router.delete('/feedback/:id', authMiddleware, requireRole('university','sysadmi
 });
 
 // GET /api/admin/activity
+// University reviewers and system administrators can read activity using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/activity', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM activityLog ORDER BY timestamp DESC LIMIT 50');
