@@ -103,6 +103,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // POST /api/auth/register/student
+// Public callers can submit register student using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/register/student', async (req, res) => {
   const name = req.body && req.body.name ? String(req.body.name).trim() : '';
   const email = req.body && req.body.email ? String(req.body.email).trim().toLowerCase() : '';
