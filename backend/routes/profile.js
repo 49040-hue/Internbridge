@@ -54,6 +54,7 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // PUT /api/profile
+// Authenticated users can update profile using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.put('/', authMiddleware, async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [req.user.id]);
