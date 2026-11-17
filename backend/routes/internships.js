@@ -343,6 +343,7 @@ router.delete('/:id/slots/:slotId', authMiddleware, requireRole('company'), asyn
 });
 
 // POST /api/internships/:id/slots/:slotId/book — student books a slot
+// Students can submit slots book using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/:id/slots/:slotId/book', authMiddleware, requireRole('student'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM internships WHERE id = ? LIMIT 1', [parseInt(req.params.id)]);
