@@ -251,6 +251,7 @@ router.patch('/:id/approve', authMiddleware, requireRole('sysadmin', 'university
 });
 
 // PATCH /api/internships/:id — company edits their internship (limited fields)
+// Companies can update internships using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/:id', authMiddleware, requireRole('company'), async (req, res) => {
   try {
     const iid = parseInt(req.params.id);
