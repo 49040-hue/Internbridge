@@ -451,6 +451,7 @@ router.post('/register/company', async (req, res) => {
 });
 
 // POST /api/auth/change-password
+// Authenticated users can submit change password using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/change-password', authMiddleware, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword)
