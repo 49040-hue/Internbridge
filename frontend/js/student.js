@@ -12,6 +12,7 @@ function _isCompanyApproved(item) {
   );
 }
 
+// Student page navigation calls this without arguments; it loads opportunities, applications, feedback, and submissions for the signed-in student and renders the dashboard.
 async function initStudentDashboard() {
   try {
     let [internships, applications, feedback, selfFound] = await Promise.all([
