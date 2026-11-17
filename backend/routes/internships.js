@@ -326,6 +326,7 @@ router.post('/:id/slots', authMiddleware, requireRole('company'), async (req, re
 });
 
 // DELETE /api/internships/:id/slots/:slotId — company removes slot
+// Companies can remove slots using path parameters identifying the target record; it returns a success result or a not-found/error response. The route keeps this destructive operation subject to its authorization and ownership checks.
 router.delete('/:id/slots/:slotId', authMiddleware, requireRole('company'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM internships WHERE id = ? AND companyId = ? LIMIT 1', [parseInt(req.params.id), req.user.id]);
