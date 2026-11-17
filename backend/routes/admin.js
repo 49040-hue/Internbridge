@@ -422,6 +422,7 @@ router.patch('/feedback/:id/read', authMiddleware, async (req, res) => {
 });
 
 // DELETE /api/admin/feedback/:id — delete feedback (university/sysadmin only)
+// University reviewers and system administrators can remove feedback using path parameters identifying the target record; it returns a success result or a not-found/error response. The route keeps this destructive operation subject to its authorization and ownership checks.
 router.delete('/feedback/:id', authMiddleware, requireRole('university','sysadmin'), async (req, res) => {
   try {
     await db.execute('DELETE FROM universityFeedback WHERE id = ?', [parseInt(req.params.id)]);
