@@ -204,6 +204,7 @@ function initPostInternship() {
   renderTimeSlots();
 }
 
+// The company post form supplies internship fields and time slots; this submits them through the API and reports the result so review rules remain server-enforced.
 async function submitPostInternship() {
   const d = {
     title:        document.getElementById('pi-title').value.trim(),
