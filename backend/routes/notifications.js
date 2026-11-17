@@ -28,6 +28,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
 // PATCH /api/notifications/:id/read — mark one as read
 // PATCH /api/notifications/read-all — mark all as read for user
+// Authenticated users can update read all using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/read-all', authMiddleware, async (req, res) => {
   try {
     await db.execute('UPDATE notifications SET isRead = 1 WHERE userId = ?', [req.user.id]);
