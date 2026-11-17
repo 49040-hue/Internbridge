@@ -148,6 +148,7 @@ app.use('/api/profile',      require('./routes/profile'));
 app.use('/api/self-found',   require('./routes/selfFound'));
 app.use('/api/notifications', require('./routes/notifications'));
 
+// Public monitoring callers receive a JSON status, version, and timestamp; this endpoint provides a compact application health response.
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '4.0', time: new Date().toISOString() }));
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/index.html')));
