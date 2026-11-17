@@ -53,6 +53,7 @@ router.get('/stats', authMiddleware, requireRole('university', 'sysadmin'), asyn
 });
 
 // GET /api/admin/students/pending
+// University reviewers and system administrators can read students pending using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/students/pending', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute("SELECT * FROM users WHERE role = 'student' AND accountStatus = 'pending_verification'");
