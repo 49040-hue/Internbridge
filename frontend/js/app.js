@@ -201,6 +201,7 @@ async function navigateTo(pageId, options = {}) {
   }
 }
 
+// Signed-in dashboard navigation calls this without arguments; it fetches role-relevant counts and updates badges so pending work is visible in the sidebar.
 async function updateSidebarBadges() {
   if (!authToken || !currentUser) return;
   try {
