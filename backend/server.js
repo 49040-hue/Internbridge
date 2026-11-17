@@ -22,6 +22,7 @@ async function ensureColumn(table, column, definition) {
   }
 }
 
+// Startup-only migration helper checks selected compatibility columns and support tables, performs idempotent additions, and logs individual failures so startup remains diagnosable.
 async function ensureStartupSchema() {
   const userColumns = [
     ['transcriptFileId', 'INT UNSIGNED NULL'],
