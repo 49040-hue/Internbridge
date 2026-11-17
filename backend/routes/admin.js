@@ -640,6 +640,7 @@ router.post('/users/create-admin', authMiddleware, requireRole('sysadmin'), asyn
 });
 
 // PATCH /api/admin/users/:id/suspend — suspend or unsuspend student
+// System administrators can update users suspend using path parameters and the JSON request body; it returns the updated result or a validation/error response. The route keeps updates subject to its authorization and workflow checks.
 router.patch('/users/:id/suspend', authMiddleware, requireRole('sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [parseInt(req.params.id)]);
