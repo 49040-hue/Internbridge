@@ -150,6 +150,7 @@ router.get('/students', authMiddleware, requireRole('university', 'sysadmin'), a
 });
 
 // GET /api/admin/students-list — lightweight list of verified students for university dropdowns
+// University reviewers and system administrators can read students list using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/students-list', authMiddleware, requireRole('university', 'sysadmin'), async (req, res) => {
   try {
     const [rows] = await db.execute("SELECT id, name, email, university, program, semester, accountStatus, role FROM users WHERE role = 'student' AND accountStatus = 'verified'");
