@@ -151,6 +151,7 @@ app.use('/api/notifications', require('./routes/notifications'));
 // Public monitoring callers receive a JSON status, version, and timestamp; this endpoint provides a compact application health response.
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '4.0', time: new Date().toISOString() }));
 
+// Browser navigation to an unrecognized frontend path receives the SPA entry document; API routers are mounted first so this fallback does not replace them.
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/index.html')));
 
 async function seedDevelopmentAccounts() {
