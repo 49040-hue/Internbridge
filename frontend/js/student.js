@@ -184,6 +184,7 @@ function filterInternships() {
   document.getElementById('internship-list').innerHTML = renderInternshipCards(list, window._searchProfile || null);
 }
 
+// Student-facing cards pass an internship identifier; this submits the application and reports success or failure so duplicate or invalid applications remain server-checked.
 async function applyForInternship(id) {
   try {
     await api.apply(id, authToken);
