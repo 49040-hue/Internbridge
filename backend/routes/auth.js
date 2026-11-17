@@ -479,6 +479,7 @@ router.post('/change-password', authMiddleware, async (req, res) => {
 });
 
 // POST /api/auth/forgot-password
+// Public callers can submit forgot password using any path parameters and the JSON request body; it returns the operation result or a validation/error response. Keeping this operation in the router preserves its validation and workflow checks.
 router.post('/forgot-password', async (req, res) => {
   const email = req.body && req.body.email ? String(req.body.email).trim().toLowerCase() : '';
   if (!email) return res.status(400).json({ error: 'Email is required.' });
