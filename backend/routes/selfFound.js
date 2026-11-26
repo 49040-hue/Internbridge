@@ -100,7 +100,7 @@ router.get('/mine', authMiddleware, async (req, res) => {
 // University reviewers and system administrators can read self found using path parameters and any query filters supported by this endpoint; it returns the requested data or a not-found/error response. Keeping this read in the router applies its access and record-scoping rules consistently.
 router.get('/', authMiddleware, requireRole('university','sysadmin'), async (req, res) => {
   try {
-    const [rows] = await db.execute('SELECT sf.*, u.email AS student_email FROM self_found_internships sf LEFT JOIN users u ON u.id = sf.student_id ORDER BY sf.submitted_at DESC');
+    const [rows] = await db.execute('SELECT sf.id, sf.student_id, sf.student_name, sf.company_name, sf.company_website, sf.supervisor_name, sf.supervisor_email, sf.start_date, sf.end_date, sf.stipend, sf.work_description, sf.offer_letter_doc, sf.status, sf.admin_note, sf.submitted_at, sf.reviewed_at, u.email AS student_email FROM self_found_internships sf LEFT JOIN users u ON u.id = sf.student_id ORDER BY sf.submitted_at DESC');
     return res.json((rows || []).map(mapSelfFoundRow));
   } catch (err) {
     console.error('Get all self-found error:', err && err.stack || err);
