@@ -68,7 +68,7 @@ async function initMyInternships() {
         <div class="internship-card" id="internship-card-${i.id}">
           <div>
             <div class="title">${i.title}
-              ${i.riphahApproved ? ' <span class="chip-ok">✓ Riphah Approved</span>' : '<span class="chip-warn">⏳ Awaiting Riphah Approval</span>'}
+              ${i.riphahApproved === true ? ' <span class="chip-ok">✓ Riphah Approved</span>' : '<span class="chip-warn">⏳ Awaiting Riphah Approval</span>'}
               ${i.rejectionNote ? ' <span class="chip-warn">✗ Rejected</span>' : ''}
             </div>
             <div class="meta">📍 ${i.city} &nbsp;⏰ ${i.deadline} &nbsp;💰 ${i.stipend} &nbsp;⏳ ${i.duration} &nbsp;👥 ${i.applicantsCount} applicants</div>
