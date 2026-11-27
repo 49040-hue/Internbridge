@@ -148,6 +148,21 @@ async function _parseOrText(res) {
   }
 }
 
+function normalizeInternship(i) {
+  const duration = i.duration !== undefined && i.duration !== null
+    ? i.duration
+    : i.durationWeeks === undefined || i.durationWeeks === null
+      ? '—'
+      : `${i.durationWeeks} weeks · ${i.type || 'full-time'}`;
+  return {
+    ...i,
+    duration,
+    riphahApproved: !!(i.riphahApproved || i.sysadminApproved),
+    isRemote: !!i.isRemote,
+    applicantsCount: Number(i.applicantsCount) || 0,
+  };
+}
+
 function _eligStudent(s) {
   const i = [];
   if ((s.creditHours||0) < 60) i.push('Less than 60 credit hours (' + (s.creditHours||0) + '/60)');
@@ -403,7 +418,7 @@ const api = {
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch internships'); }
       const list = await _parseOrText(res);
       // parse timeSlots if stored as JSON string
-      return list.map(i => ({ ...i, timeSlots: i.timeSlots && typeof i.timeSlots === 'string' ? JSON.parse(i.timeSlots) : (i.timeSlots||[]) }));
+      return list.map(i => normalizeInternship({ ...i, timeSlots: i.timeSlots && typeof i.timeSlots === 'string' ? JSON.parse(i.timeSlots) : (i.timeSlots||[]) }));
     } catch (err) {
       // fallback to in-memory
       await _delay();
@@ -421,7 +436,7 @@ const api = {
       const res = await fetch('/api/internships/all', { headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch'); }
       const rows = await _parseOrText(res);
-      return rows.map(i => ({
+      return rows.map(i => normalizeInternship({
         ...i,
         timeSlots: i.timeSlots && typeof i.timeSlots === 'string' ? JSON.parse(i.timeSlots) : (i.timeSlots||[]),
         eligibilityIssues: i.criteriaIssues || i.eligibilityIssues || [],
@@ -439,7 +454,7 @@ const api = {
       const res = await fetch('/api/internships/company/mine', { headers });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to fetch'); }
       const rows = await res.json();
-      return rows.map(i => ({ ...i, timeSlots: i.timeSlots && typeof i.timeSlots === 'string' ? JSON.parse(i.timeSlots) : (i.timeSlots||[]) }));
+      return rows.map(i => normalizeInternship({ ...i, timeSlots: i.timeSlots && typeof i.timeSlots === 'string' ? JSON.parse(i.timeSlots) : (i.timeSlots||[]) }));
     } catch (err) {
       await _delay();
       const clean = await _getLatestToken();
@@ -456,7 +471,7 @@ const api = {
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to create internship'); }
       const row = await _parseOrText(res);
       row.timeSlots = row.timeSlots && typeof row.timeSlots === 'string' ? JSON.parse(row.timeSlots) : (row.timeSlots||[]);
-      return row;
+      return normalizeInternship(row);
     } catch (err) {
       await _delay(); const u = _dec(t); // fallback
       const item = { id:_db._next.internships++, companyId:u.id, company:u.name, title:d.title, city:d.city, deadline:d.deadline, stipend:d.stipend||'Not specified', duration:d.duration||(d.durationWeeks + ' weeks ' + d.type), durationWeeks:parseInt(d.durationWeeks)||8, type:d.type||'full-time', description:d.description||'', status:'open', riphahApproved:false, rejectionNote:'', createdAt:new Date().toISOString().split('T')[0] };
@@ -472,7 +487,7 @@ const api = {
       if (t) { const tok = typeof t === 'string' && t.startsWith('Bearer ') ? t.split(' ')[1] : t; headers['Authorization'] = 'Bearer ' + tok; }
       const res = await fetch('/api/internships/' + encodeURIComponent(id), { method: 'PATCH', headers, body: JSON.stringify(data) });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to update internship'); }
-      return await _parseOrText(res);
+      return normalizeInternship(await _parseOrText(res));
     } catch (err) {
       await _delay(); throw err;
     }
@@ -490,7 +505,7 @@ const api = {
       }
       const res = await fetch('/api/internships/' + id + '/approve', options);
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to approve'); }
-      const row = await _parseOrText(res); row.timeSlots = row.timeSlots && typeof row.timeSlots === 'string' ? JSON.parse(row.timeSlots) : (row.timeSlots||[]); return row;
+      const row = await _parseOrText(res); row.timeSlots = row.timeSlots && typeof row.timeSlots === 'string' ? JSON.parse(row.timeSlots) : (row.timeSlots||[]); return normalizeInternship(row);
     } catch (err) {
       await _delay();
       const i = _db.internships.find(x => x.id === id);
@@ -508,7 +523,7 @@ const api = {
       if (tok) headers['Authorization'] = 'Bearer ' + tok;
       const res = await fetch('/api/internships/' + id + '/reject', { method: 'PATCH', headers, body: JSON.stringify({ note }) });
       if (!res.ok) { const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Failed to reject'); }
-      const row = await res.json(); row.timeSlots = row.timeSlots && typeof row.timeSlots === 'string' ? JSON.parse(row.timeSlots) : (row.timeSlots||[]); return row;
+      const row = await res.json(); row.timeSlots = row.timeSlots && typeof row.timeSlots === 'string' ? JSON.parse(row.timeSlots) : (row.timeSlots||[]); return normalizeInternship(row);
     } catch (err) { await _delay(); const i = _db.internships.find(x => x.id === id); if (!i) throw new Error('Not found.'); i.riphahApproved = false; i.status = 'closed'; i.rejectionNote = note||''; _log('Internship rejected: ' + i.title, 'warning'); _save(); return i; }
   },
 
