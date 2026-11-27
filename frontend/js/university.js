@@ -853,7 +853,7 @@ async function removePartner(idx) {
             <td>${i.deadline}</td>
             <td style="font-size:12px">${i.duration}</td>
             <td>${i.applicantsCount}</td>
-     <td>${i.riphahApproved?'<span class="text-green">✓</span>':'<span class="text-gold">⏳</span>'}</td>
+     <td>${i.riphahApproved === true?'<span class="text-green">✓</span>':'<span class="text-gold">⏳</span>'}</td>
       <td>${badge(i.status)}</td>
           </tr>`).join('')}
         </tbody>
